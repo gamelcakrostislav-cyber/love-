@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>A Very Important Question</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #fdf6ec;
+      --ink: #1a1008;
+      --rose: #e8503a;
+      --gold: #c8922a;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--cream);
+      background-image:
+        radial-gradient(ellipse at 20% 20%, #f5e6d0 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, #fce0d4 0%, transparent 55%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'DM Sans', sans-serif;
+      overflow: hidden;
+      cursor: default;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 180px; height: 180px;
+      border-color: var(--gold);
+      border-style: solid;
+      opacity: 0.25;
+      pointer-events: none;
+    }
+    body::before { top: 24px; left: 24px; border-width: 2px 0 0 2px; }
+    body::after  { bottom: 24px; right: 24px; border-width: 0 2px 2px 0; }
+
+    .card {
+      background: white;
+      border: 1.5px solid #e8ddd0;
+      border-radius: 20px;
+      padding: 52px 56px 44px;
+      max-width: 520px;
+      width: 92%;
+      text-align: center;
+      box-shadow: 0 8px 48px rgba(60,30,10,0.10), 0 1px 0 #f0e8dc;
+      animation: rise 0.7s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(28px) scale(.97); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .emoji {
+      font-size: 2.8rem;
+      margin-bottom: 18px;
+      display: block;
+      animation: bounce 2.4s ease-in-out infinite;
+    }
+    @keyframes bounce {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-7px); }
+    }
+
+    .message {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.55rem;
+      line-height: 1.5;
+      color: var(--ink);
+      margin-bottom: 10px;
+      outline: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      transition: background 0.2s;
+    }
+    .message[contenteditable="true"] { cursor: text; }
+    .message[contenteditable="true"]:hover { background: #fdf0e8; }
+    .message[contenteditable="true"]:focus {
+      background: #fef5ed;
+      box-shadow: 0 0 0 2px var(--gold);
+    }
+
+    .edit-hint {
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #c4ab8e;
+      margin-bottom: 16px;
+    }
+
+    .locked-badge {
+      display: none;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #c4ab8e;
+      margin-bottom: 16px;
+    }
+
+    .btn-save {
+      margin-bottom: 18px;
+      background: none;
+      border: 1.5px solid var(--gold);
+      border-radius: 50px;
+      padding: 9px 28px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--gold);
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: all 0.2s;
+    }
+    .btn-save:hover { background: #fdf0e8; color: var(--ink); border-color: var(--ink); }
+
+    .link-box {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: #fdf0e8;
+      border: 1.5px solid #e8ddd0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      text-align: left;
+      animation: rise 0.3s ease both;
+    }
+    .link-box span {
+      flex: 1;
+      font-family: monospace;
+      font-size: 0.68rem;
+      color: #7a6050;
+      word-break: break-all;
+    }
+    .copy-btn {
+      flex-shrink: 0;
+      background: var(--gold);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 13px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .copy-btn:hover { opacity: 0.82; }
+
+    .buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      height: 60px;
+    }
+
+    .btn {
+      padding: 14px 38px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn-yes {
+      background: var(--rose);
+      color: white;
+      box-shadow: 0 4px 18px rgba(232,80,58,0.35);
+    }
+    .btn-yes:hover {
+      transform: scale(1.07);
+      box-shadow: 0 6px 24px rgba(232,80,58,0.45);
+    }
+    .btn-yes:active { transform: scale(0.97); }
+
+    .btn-no {
+      background: #ede4d8;
+      color: #9a8070;
+      box-shadow: none;
+      position: absolute;
+      white-space: nowrap;
+      transition: font-size 0.3s ease;
+      user-select: none;
+    }
+
+    #victory {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      animation: rise 0.5s cubic-bezier(.22,1,.36,1) both;
+    }
+    #victory .big { font-size: 3.5rem; }
+    #victory h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem;
+      color: var(--rose);
+    }
+    #victory p { color: #9a8070; font-size: 0.95rem; }
+    .restart {
+      margin-top: 8px;
+      background: none;
+      border: 1.5px solid #d4c4b4;
+      border-radius: 50px;
+      padding: 9px 26px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem;
+      color: #9a8070;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .restart:hover { background: #fdf0e8; border-color: var(--gold); color: var(--ink); }
+  </style>
+</head>
+<body>
+
+<div class="card" id="main-card">
+  <span class="emoji">🥺</span>
+
+  <div class="message" id="msg" contenteditable="true" spellcheck="false">Will you be my Valentine?</div>
+
+  <p class="edit-hint" id="edit-hint">✏️ click the text above to edit it</p>
+  <p class="locked-badge" id="locked-badge">🔒 locked — view only</p>
+
+  <button class="btn-save" id="btn-save" onclick="saveLink()">🔗 Generate shareable link</button>
+
+  <div class="link-box" id="link-box">
+    <span id="link-text"></span>
+    <button class="copy-btn" id="copy-btn" onclick="copyLink()">Copy</button>
+  </div>
+
+  <div class="buttons" id="btn-area">
+    <button class="btn btn-yes" id="btn-yes" onclick="handleYes()">Yes 💖</button>
+    <button class="btn btn-no" id="btn-no">No</button>
+  </div>
+
+  <div id="victory">
+    <span class="big">🎉</span>
+    <h2>Yay! They said YES!</h2>
+    <p>The NO button never stood a chance.</p>
+    <button class="restart" onclick="restart()">↩ Start over</button>
+  </div>
+</div>
+
+<script>
+  const noBtn       = document.getElementById('btn-no');
+  const btnArea     = document.getElementById('btn-area');
+  const yesBtn      = document.getElementById('btn-yes');
+  const victory     = document.getElementById('victory');
+  const emoji       = document.querySelector('.emoji');
+  const msgEl       = document.getElementById('msg');
+  const editHint    = document.getElementById('edit-hint');
+  const lockedBadge = document.getElementById('locked-badge');
+  const btnSave     = document.getElementById('btn-save');
+  const linkBox     = document.getElementById('link-box');
+  const linkText    = document.getElementById('link-text');
+
+  let escapeCount = 0;
+  let isLocked = false;
+
+  /* ── Check URL for locked/shared mode ── */
+  const params = new URLSearchParams(window.location.search);
+  const sharedText = params.get('q');
+  if (sharedText) {
+    msgEl.textContent = sharedText;
+    msgEl.removeAttribute('contenteditable');
+    msgEl.style.cursor = 'default';
+    editHint.style.display = 'none';
+    lockedBadge.style.display = 'block';
+    btnSave.style.display = 'none';
+    isLocked = true;
+  }
+
+  /* ── Generate shareable URL ── */
+  function saveLink() {
+    // Force blur so browser commits any ongoing edits
+    msgEl.blur();
+    const text = (msgEl.innerText || msgEl.textContent || '').trim();
+    if (!text) return;
+    const url = window.location.origin + window.location.pathname + '?q=' + encodeURIComponent(text);
+    linkText.textContent = url;
+    linkBox.style.display = 'flex';
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(linkText.textContent).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+
+  /* Auto-refresh link while typing if link box already open */
+  msgEl.addEventListener('input', () => {
+    if (linkBox.style.display === 'flex') saveLink();
+  });
+  function randomPos() {
+    const areaW = btnArea.offsetWidth;
+    const bW = noBtn.offsetWidth;
+    const margin = 14;
+    const x = margin + Math.random() * (areaW - bW - margin * 2);
+    const y = -(50 + Math.random() * 200);
+    noBtn.style.left = x + 'px';
+    noBtn.style.top  = y + 'px';
+  }
+
+  noBtn.addEventListener('mouseenter', () => {
+    escapeCount++;
+    randomPos();
+    if (escapeCount === 3)  noBtn.style.fontSize = '0.85rem';
+    if (escapeCount === 6)  noBtn.style.fontSize = '0.7rem';
+    if (escapeCount === 10) noBtn.style.fontSize = '0.55rem';
+    if (escapeCount >= 12)  noBtn.style.opacity = '0.3';
+  });
+
+  noBtn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    escapeCount++;
+    randomPos();
+  });
+
+  /* Initial NO position — right next to YES */
+  function placeNoNext() {
+    const yesRect  = yesBtn.getBoundingClientRect();
+    const areaRect = btnArea.getBoundingClientRect();
+    noBtn.style.left = (yesRect.right - areaRect.left + 16) + 'px';
+    noBtn.style.top  = (yesRect.top - areaRect.top) + 'px';
+  }
+  window.addEventListener('load', placeNoNext);
+
+  function handleYes() {
+    btnArea.style.display = 'none';
+    editHint.style.display = 'none';
+    lockedBadge.style.display = 'none';
+    btnSave.style.display = 'none';
+    linkBox.style.display = 'none';
+    msgEl.style.display = 'none';
+    emoji.textContent = '🎊';
+    victory.style.display = 'flex';
+  }
+
+  function restart() {
+    escapeCount = 0;
+    noBtn.style.fontSize = '1rem';
+    noBtn.style.opacity = '1';
+    btnArea.style.display = 'flex';
+    msgEl.style.display = 'block';
+    victory.style.display = 'none';
+    emoji.textContent = '🥺';
+    if (isLocked) {
+      lockedBadge.style.display = 'block';
+    } else {
+      editHint.style.display = 'block';
+      btnSave.style.display = 'inline-block';
+    }
+    placeNoNext();
+  }
+</script>
+</body>
+</html>
