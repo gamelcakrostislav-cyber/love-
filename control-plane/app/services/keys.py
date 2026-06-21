@@ -62,3 +62,9 @@ async def validate(db: AsyncSession, raw_key: str) -> ApiKey:
         raise KeyDisabled()
     key.last_used_at = datetime.now(UTC)
     return key
+
+
+async def get_active_key(db: AsyncSession, user_id: int) -> ApiKey | None:
+    return await db.scalar(
+        select(ApiKey).where(ApiKey.user_id == user_id, ApiKey.status == ApiKeyStatus.ACTIVE)
+    )

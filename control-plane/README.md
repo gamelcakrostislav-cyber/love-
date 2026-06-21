@@ -94,8 +94,8 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 2. **DB** — models + Alembic migration + plan seeder ✅
    _(extends the spec schema with `referrals` + `commissions` tables and `is_blogger`/`referred_by` on users for the rev-share system)_
 3. **Licensing core** — key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint ✅
-4. **Anti-abuse layer** — fingerprint dedup, IP velocity / impossible travel, signed anti-replay, abuse_events, flagging, audit log ✅ ← _current_
-5. Bot (client commands incl. `/devices` and key reissue)
+4. **Anti-abuse layer** — fingerprint dedup, IP velocity / impossible travel, signed anti-replay, abuse_events, flagging, audit log ✅
+5. **Bot** — client commands incl. `/devices` and key reissue; referral capture on `/start <ref>` ✅ ← _current_
 6. Payments (provider interface, Crypto Pay, signed + idempotent webhook, activation)
 7. Admin + worker (admin commands, auto-expiry, session reaping)
 8. Tests (pytest)
@@ -150,6 +150,24 @@ impossible-travel** → issue device-bound JWT mirrored in Redis.
 
 Flags set `api_keys.flagged`, record an `abuse_event`, and bump `risk_score` — the
 key keeps working until an admin acts (low false-positive cost).
+
+## Telegram bot
+
+Client commands (aiogram 3.x long-polling):
+
+| Command | Action |
+|---|---|
+| `/start [ref]` | provision account; `ref` = inviter's Telegram id captures a referral |
+| `/plans` | list plans (inline buy buttons) |
+| `/buy <plan>` | create an invoice (Crypto Pay wired in Phase 6) |
+| `/status` | subscription, expiry, API-key prefix |
+| `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
+| `/devices` | list registered devices; remove one to free a slot |
+| `/help` | command list |
+
+Referral reward unlocks only when the referred user actually pays (handled at the
+payment webhook in Phase 6); standard 20% / blogger 30%, one referrer per user,
+no self-referral.
 
 ## Security notes
 
