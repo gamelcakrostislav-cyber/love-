@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash control-plane/scripts/session_setup.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

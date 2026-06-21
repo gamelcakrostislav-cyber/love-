@@ -97,8 +97,8 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 4. **Anti-abuse layer** — fingerprint dedup, IP velocity / impossible travel, signed anti-replay, abuse_events, flagging, audit log ✅
 5. **Bot** — client commands incl. `/devices` and key reissue; referral capture on `/start <ref>` ✅
 6. **Payments** — `PaymentProvider` interface, Crypto Pay, signed + idempotent webhook, activation ✅
-7. **Admin + worker** — admin commands, auto-expiry, session reaping ✅ ← _current_
-8. Tests (pytest)
+7. **Admin + worker** — admin commands, auto-expiry, session reaping ✅
+8. **Tests** — pytest: key validation, device-limit, concurrency, webhook signature/idempotency, expiry ✅ ← _current_
 
 ## API (licensing core)
 
@@ -203,6 +203,27 @@ Webhook: `POST /webhooks/cryptopay`
    linkage) → unlock referral commission → invalidate entitlement cache.
 
 Point Crypto Pay's webhook at `https://<host>/webhooks/cryptopay`.
+
+## Tests
+
+```bash
+cd control-plane
+./scripts/run_tests.sh          # starts postgres+redis, installs deps, runs pytest
+```
+
+The suite needs a Postgres + Redis (the compose services) because the licensing
+logic is inseparable from both. It covers:
+
+| File | Covers |
+|---|---|
+| `test_keys.py` | key gen/hash, validate active/unknown/disabled, reissue disables old |
+| `test_device_limit.py` | first device active, 2nd → cooldown + abuse_event, auto-approve after window |
+| `test_concurrency.py` | over-cap eviction (oldest killed + logged), within-cap keeps both |
+| `test_webhook.py` | Crypto Pay signature verify, paid-event parse, activation idempotency |
+| `test_expiry.py` | expiry → sub expired, key disabled, Redis session killed |
+
+CI/web sessions: `scripts/session_setup.sh` (wired as a SessionStart hook) installs
+deps and brings up Postgres + Redis best-effort.
 
 ## Security notes
 
