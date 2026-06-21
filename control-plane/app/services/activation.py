@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.api_key import ApiKey
-from app.models.enums import PaymentStatus, SubscriptionStatus
+from app.models.enums import ApiKeyStatus, PaymentStatus, SubscriptionStatus
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.subscription import Subscription
@@ -73,10 +73,24 @@ async def _grant_subscription(
 
 
 async def _ensure_key(db: AsyncSession, user: User) -> tuple[ApiKey, str | None]:
-    """Return the user's active key, issuing a new one (raw) if none exists."""
-    existing = await keys.get_active_key(db, user.id)
-    if existing is not None:
-        return existing, None
+    """Return the user's key, reactivating a disabled one or issuing a fresh one.
+
+    Since expiry disables keys, a renewing user gets their *same* key reactivated
+    (no surprise rotation); only an explicit `/key` reissue rotates. A brand-new
+    customer gets a freshly issued key whose raw value is DM'd once.
+    """
+    most_recent = await db.scalar(
+        select(ApiKey).where(ApiKey.user_id == user.id).order_by(ApiKey.created_at.desc()).limit(1)
+    )
+    if most_recent is not None and most_recent.status == ApiKeyStatus.ACTIVE:
+        return most_recent, None
+    if most_recent is not None and most_recent.status == ApiKeyStatus.DISABLED:
+        most_recent.status = ApiKeyStatus.ACTIVE
+        await record_audit(
+            db, actor="system", action="key_reactivated", target=str(most_recent.id),
+            meta={"user_id": user.id},
+        )
+        return most_recent, None
     key, raw = await keys.issue(db, user.id)
     return key, raw
 

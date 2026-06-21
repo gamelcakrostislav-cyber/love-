@@ -96,8 +96,8 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 3. **Licensing core** — key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint ✅
 4. **Anti-abuse layer** — fingerprint dedup, IP velocity / impossible travel, signed anti-replay, abuse_events, flagging, audit log ✅
 5. **Bot** — client commands incl. `/devices` and key reissue; referral capture on `/start <ref>` ✅
-6. **Payments** — `PaymentProvider` interface, Crypto Pay, signed + idempotent webhook, activation ✅ ← _current_
-7. Admin + worker (admin commands, auto-expiry, session reaping)
+6. **Payments** — `PaymentProvider` interface, Crypto Pay, signed + idempotent webhook, activation ✅
+7. **Admin + worker** — admin commands, auto-expiry, session reaping ✅ ← _current_
 8. Tests (pytest)
 
 ## API (licensing core)
@@ -168,6 +168,24 @@ Client commands (aiogram 3.x long-polling):
 Referral reward unlocks only when the referred user actually pays (handled at the
 payment webhook in Phase 6); standard 20% / blogger 30%, one referrer per user,
 no self-referral.
+
+Admin commands (Telegram ids in `ADMIN_IDS`):
+
+| Command | Action |
+|---|---|
+| `/stats` | active users, sessions, paid revenue, flagged + abuse counts |
+| `/grant <telegram_id> <plan>` | grant/extend access (reuses webhook activation) |
+| `/revoke <telegram_id>` | revoke subscription, disable keys, kill sessions |
+| `/flags` | review flagged keys + recent abuse events |
+| `/unflag <key_prefix\|id>` | clear a flag |
+
+## Worker
+
+The `worker` service (APScheduler) runs an expiry sweep every minute:
+subscriptions past `expires_at` → `expired`, their keys disabled, their Redis
+sessions killed, stale session rows reaped. Expiry is therefore enforced
+server-side — the client can never self-extend, and revocation/expiry propagates
+within the entitlement cache window.
 
 ## Payments
 

@@ -12,7 +12,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from app.bot.handlers import client
+from app.bot.handlers import admin, client
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 
@@ -21,6 +21,8 @@ log = get_logger("bot")
 
 def build_dispatcher() -> Dispatcher:
     dp = Dispatcher()
+    # Admin router first: its IsAdmin filter scopes /stats, /grant, etc.
+    dp.include_router(admin.router)
     dp.include_router(client.router)
     return dp
 
