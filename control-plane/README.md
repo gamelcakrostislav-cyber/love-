@@ -92,13 +92,37 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 1. **Scaffold** — structure, `.env.example`, docker-compose, Postgres+Redis, health-check ✅
 2. **DB** — models + Alembic migration + plan seeder ✅
-   _(extends the spec schema with `referrals` + `commissions` tables and `is_blogger`/`referred_by` on users for the rev-share system)_ ← _current_
-3. Licensing core (key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint)
+   _(extends the spec schema with `referrals` + `commissions` tables and `is_blogger`/`referred_by` on users for the rev-share system)_
+3. **Licensing core** — key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint ✅ ← _current_
 4. Anti-abuse layer (fingerprint dedup, IP velocity, abuse_events, flagging, audit log)
 5. Bot (client commands incl. `/devices` and key reissue)
 6. Payments (provider interface, Crypto Pay, signed + idempotent webhook, activation)
 7. Admin + worker (admin commands, auto-expiry, session reaping)
 8. Tests (pytest)
+
+## API (licensing core)
+
+Exchange a key for a short-lived, device-bound token, then call the protected
+engine with that token only:
+
+```bash
+# 1. Session token (raw key used here and nowhere else)
+curl -s localhost:8000/auth/session -H 'content-type: application/json' -d '{
+  "api_key": "<RAW_KEY>",
+  "device_fingerprint": "device-abc-123"
+}'
+# -> { "token": "...", "session_id": "...", "expires_at": "...", "plan": "monthly", ... }
+
+# 2. Protected engine — only the token is accepted, plus the bound fingerprint
+curl -s localhost:8000/v1/opportunities \
+  -H 'Authorization: Bearer <TOKEN>' \
+  -H 'X-Device-Fingerprint: device-abc-123'
+# trial keys see only opportunities with profitability <= 2%; paid keys see all
+```
+
+Enforcement at `/auth/session` (all server-side): key validity → active
+subscription → device limit (24h cooldown beyond `max_devices`) → concurrency cap
+(evict oldest + log) → IP trail → issue device-bound JWT mirrored in Redis.
 
 ## Security notes
 

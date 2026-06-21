@@ -9,12 +9,15 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.core.db import engine
 from app.core.logging import configure_logging, get_logger
 from app.core.redis import ping as redis_ping
+from app.gateway.routers import auth, protected
+from app.services.errors import LicensingError
 
 log = get_logger("gateway")
 
@@ -30,6 +33,17 @@ async def lifespan(_: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Control Plane Gateway", version="0.1.0", lifespan=lifespan)
+
+    @app.exception_handler(LicensingError)
+    async def _licensing_error_handler(_: Request, exc: LicensingError) -> JSONResponse:
+        # Map typed entitlement failures to stable codes + HTTP statuses.
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={"error": exc.code, "detail": exc.message},
+        )
+
+    app.include_router(auth.router)
+    app.include_router(protected.router)
 
     @app.get("/health", tags=["ops"])
     async def health() -> dict:
