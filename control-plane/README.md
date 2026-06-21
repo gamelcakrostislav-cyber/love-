@@ -63,12 +63,24 @@ cp .env.example .env          # then fill in BOT_TOKEN, CRYPTOPAY_API_TOKEN, JWT
 docker compose up --build
 ```
 
-Check health once the stack is up:
+On startup the gateway automatically applies migrations (`alembic upgrade head`)
+and seeds the plan catalog. Check health once the stack is up:
 
 ```bash
 curl localhost:8000/health
 # {"status":"ok","checks":{"postgres":true,"redis":true}}
 ```
+
+### Database (manual)
+
+```bash
+alembic upgrade head          # apply schema
+python -m scripts.seed_plans  # seed/refresh the trial / monthly / yearly plans
+alembic downgrade -1          # roll back
+```
+
+Tables: `users`, `plans`, `subscriptions`, `api_keys`, `devices`, `sessions`,
+`payments`, `referrals`, `commissions`, `abuse_events`, `audit_log`.
 
 Generate a strong JWT secret:
 
@@ -78,8 +90,9 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 ## Build phases
 
-1. **Scaffold** — structure, `.env.example`, docker-compose, Postgres+Redis, health-check ← _current_
-2. DB models + Alembic migration + plan seeder
+1. **Scaffold** — structure, `.env.example`, docker-compose, Postgres+Redis, health-check ✅
+2. **DB** — models + Alembic migration + plan seeder ✅
+   _(extends the spec schema with `referrals` + `commissions` tables and `is_blogger`/`referred_by` on users for the rev-share system)_ ← _current_
 3. Licensing core (key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint)
 4. Anti-abuse layer (fingerprint dedup, IP velocity, abuse_events, flagging, audit log)
 5. Bot (client commands incl. `/devices` and key reissue)

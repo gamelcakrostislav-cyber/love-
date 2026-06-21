@@ -31,7 +31,7 @@ services:
   gateway:
     build: .
     env_file: .env
-    command: uvicorn app.gateway.main:app --host 0.0.0.0 --port 8000
+    command: bash scripts/start_gateway.sh
     ports:
       - "8000:8000"
     depends_on:
