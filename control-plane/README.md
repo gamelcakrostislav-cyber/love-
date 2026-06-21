@@ -95,8 +95,8 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
    _(extends the spec schema with `referrals` + `commissions` tables and `is_blogger`/`referred_by` on users for the rev-share system)_
 3. **Licensing core** — key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint ✅
 4. **Anti-abuse layer** — fingerprint dedup, IP velocity / impossible travel, signed anti-replay, abuse_events, flagging, audit log ✅
-5. **Bot** — client commands incl. `/devices` and key reissue; referral capture on `/start <ref>` ✅ ← _current_
-6. Payments (provider interface, Crypto Pay, signed + idempotent webhook, activation)
+5. **Bot** — client commands incl. `/devices` and key reissue; referral capture on `/start <ref>` ✅
+6. **Payments** — `PaymentProvider` interface, Crypto Pay, signed + idempotent webhook, activation ✅ ← _current_
 7. Admin + worker (admin commands, auto-expiry, session reaping)
 8. Tests (pytest)
 
@@ -168,6 +168,23 @@ Client commands (aiogram 3.x long-polling):
 Referral reward unlocks only when the referred user actually pays (handled at the
 payment webhook in Phase 6); standard 20% / blogger 30%, one referrer per user,
 no self-referral.
+
+## Payments
+
+`PaymentProvider` abstraction with a **Crypto Pay** (`@CryptoBot`) implementation
+(`app/payments/`); falls back to an offline stub when `CRYPTOPAY_API_TOKEN` is
+unset so `/buy` works in local dev.
+
+Webhook: `POST /webhooks/cryptopay`
+1. **Verify signature first** — `HMAC_SHA256(body, key=SHA256(api_token))` against
+   the `crypto-pay-api-signature` header. A forged/unsigned call grants nothing.
+2. **Idempotent** — deduped by `external_id`; a replayed "paid" never extends a
+   subscription twice or double-credits a referral.
+3. **Activate** — mark paid → create/extend subscription (`+duration_days`) →
+   issue key (once, DM'd) or reactivate → record `payer_fingerprint` (+ multi-account
+   linkage) → unlock referral commission → invalidate entitlement cache.
+
+Point Crypto Pay's webhook at `https://<host>/webhooks/cryptopay`.
 
 ## Security notes
 
