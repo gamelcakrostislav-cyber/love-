@@ -16,12 +16,16 @@ class SessionRequest(BaseModel):
 class SessionResponse(BaseModel):
     token: str
     session_id: str
+    # Per-session HMAC secret for signing protected requests. Delivered once,
+    # never re-sent on the wire — keep it client-side only.
+    signing_secret: str
     expires_at: datetime
     plan: str
     rate_limit_per_min: int
     # None => no cap (all opportunities visible).
     max_profitability: float | None
     evicted_sessions: int
+    flagged: bool
 
 
 class Opportunity(BaseModel):

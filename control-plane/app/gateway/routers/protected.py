@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.gateway.deps import DbDep, SessionContext, SessionDep
+from app.gateway.deps import DbDep, SessionContext, SignedSessionDep
 from app.gateway.mock_engine import get_opportunities
 from app.gateway.schemas import OpportunitiesResponse
 from app.services import entitlements, ratelimit
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/v1", tags=["engine"])
 
 @router.get("/opportunities", response_model=OpportunitiesResponse)
 async def opportunities(
-    ctx: SessionContext = SessionDep,
+    ctx: SessionContext = SignedSessionDep,
     db: AsyncSession = DbDep,
 ) -> OpportunitiesResponse:
     # Entitlement is recomputed server-side (cache-first). Revocation/expiry

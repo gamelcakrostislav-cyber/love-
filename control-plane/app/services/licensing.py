@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import security
 from app.models.session import Session
 from app.services import (
+    abuse,
     concurrency,
     devices,
     entitlements,
@@ -35,9 +36,11 @@ from app.services.errors import NoActiveSubscription
 class SessionResult:
     token: str
     session_id: str
+    signing_secret: str
     expires_at: datetime
     entitlement: Entitlement
     evicted_sessions: list[str]
+    flagged: bool
 
 
 async def create_session(
@@ -66,6 +69,11 @@ async def create_session(
         max_devices=ent.max_devices,
     )
 
+    # 3b. Multi-account: same fingerprint under other accounts -> flag cluster.
+    cluster = await abuse.detect_multi_account(
+        db, key_id=key.id, user_id=key.user_id, fingerprint=fingerprint,
+    )
+
     # 4. Concurrency cap.
     evicted = await concurrency.enforce(
         db, key_id=key.id, user_id=key.user_id,
@@ -73,10 +81,13 @@ async def create_session(
     )
 
     # 5. Risk checks (IP velocity / impossible travel).
-    await risk.evaluate_session(db, key_id=key.id, user_id=key.user_id, ip=ip)
+    travel_flagged = await risk.evaluate_session(
+        db, key_id=key.id, user_id=key.user_id, ip=ip,
+    )
 
-    # 6. Issue token + mirror session.
+    # 6. Issue token + signing secret + mirror session.
     session_id = security.new_session_id()
+    signing_secret = security.new_signing_secret()
     token, expires_at = security.create_session_token(
         key_id=key.id, session_id=session_id, fingerprint=fingerprint,
     )
@@ -91,6 +102,7 @@ async def create_session(
     )
     await session_store.create(
         session_id=session_id, key_id=key.id, device_id=device.id, ip=ip,
+        signing_secret=signing_secret,
     )
     await record_audit(
         db, actor=f"user:{key.user_id}", action="session_issued", target=session_id,
@@ -100,7 +112,9 @@ async def create_session(
     return SessionResult(
         token=token,
         session_id=session_id,
+        signing_secret=signing_secret,
         expires_at=expires_at,
         entitlement=ent,
         evicted_sessions=evicted,
+        flagged=bool(cluster) or travel_flagged,
     )

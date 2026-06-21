@@ -93,8 +93,8 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 1. **Scaffold** — structure, `.env.example`, docker-compose, Postgres+Redis, health-check ✅
 2. **DB** — models + Alembic migration + plan seeder ✅
    _(extends the spec schema with `referrals` + `commissions` tables and `is_blogger`/`referred_by` on users for the rev-share system)_
-3. **Licensing core** — key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint ✅ ← _current_
-4. Anti-abuse layer (fingerprint dedup, IP velocity, abuse_events, flagging, audit log)
+3. **Licensing core** — key issue/validate, `/auth/session`, device binding, concurrency, rate-limit, stubbed protected endpoint ✅
+4. **Anti-abuse layer** — fingerprint dedup, IP velocity / impossible travel, signed anti-replay, abuse_events, flagging, audit log ✅ ← _current_
 5. Bot (client commands incl. `/devices` and key reissue)
 6. Payments (provider interface, Crypto Pay, signed + idempotent webhook, activation)
 7. Admin + worker (admin commands, auto-expiry, session reaping)
@@ -113,16 +113,43 @@ curl -s localhost:8000/auth/session -H 'content-type: application/json' -d '{
 }'
 # -> { "token": "...", "session_id": "...", "expires_at": "...", "plan": "monthly", ... }
 
-# 2. Protected engine — only the token is accepted, plus the bound fingerprint
+# 2. Protected engine — token + bound fingerprint + signed (timestamp/nonce/HMAC)
 curl -s localhost:8000/v1/opportunities \
   -H 'Authorization: Bearer <TOKEN>' \
-  -H 'X-Device-Fingerprint: device-abc-123'
+  -H 'X-Device-Fingerprint: device-abc-123' \
+  -H 'X-Timestamp: <UNIX_TS>' -H 'X-Nonce: <RANDOM>' -H 'X-Signature: <HMAC>'
 # trial keys see only opportunities with profitability <= 2%; paid keys see all
 ```
 
+Protected requests are HMAC-signed with the per-session `signing_secret`
+returned by `/auth/session` (delivered once, never re-sent):
+
+```
+X-Signature = HMAC_SHA256(signing_secret,
+    "<timestamp>\n<nonce>\n<METHOD>\n<path>\n<sha256(body)>")
+```
+
+The nonce is single-use and the timestamp must be within
+`REQUEST_SIGNATURE_MAX_SKEW` seconds, so a sniffed request can't be replayed and
+a sniffed token alone can't forge new ones. (Set `REQUEST_SIGNING_REQUIRED=false`
+to disable during early integration.)
+
 Enforcement at `/auth/session` (all server-side): key validity → active
-subscription → device limit (24h cooldown beyond `max_devices`) → concurrency cap
-(evict oldest + log) → IP trail → issue device-bound JWT mirrored in Redis.
+subscription → device limit (24h cooldown beyond `max_devices`) → **multi-account
+fingerprint dedup** → concurrency cap (evict oldest + log) → **IP velocity /
+impossible-travel** → issue device-bound JWT mirrored in Redis.
+
+### Anti-abuse summary
+
+| Vector | Defense |
+|---|---|
+| Key sharing | device binding + 24h cooldown, concurrency cap (evict+log), per-key rate limit, signed anti-replay |
+| Multi-accounting | fingerprint dedup across accounts → flag cluster; payer-fingerprint linkage at payment |
+| Impossible travel | geo velocity between consecutive sessions → flag above threshold |
+| Subscription bypass | server-side entitlement recompute every session; flagged (not banned) state surfaced to admin |
+
+Flags set `api_keys.flagged`, record an `abuse_event`, and bump `risk_score` — the
+key keeps working until an admin acts (low false-positive cost).
 
 ## Security notes
 

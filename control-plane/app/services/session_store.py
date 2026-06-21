@@ -20,6 +20,7 @@ async def create(
     key_id: int,
     device_id: int,
     ip: str | None,
+    signing_secret: str,
     ttl: int | None = None,
 ) -> None:
     ttl = ttl or settings.jwt_ttl_seconds
@@ -35,6 +36,7 @@ async def create(
             "device_id": device_id,
             "ip": ip or "",
             "issued_at": now,
+            "signing_secret": signing_secret,
         },
     )
     pipe.expire(skey, ttl)

@@ -40,9 +40,11 @@ async def create_session(
     return SessionResponse(
         token=result.token,
         session_id=result.session_id,
+        signing_secret=result.signing_secret,
         expires_at=result.expires_at,
         plan=ent.plan_name,
         rate_limit_per_min=ent.rate_limit_per_min,
         max_profitability=ent.max_profitability,
         evicted_sessions=len(result.evicted_sessions),
+        flagged=result.flagged,
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -10,9 +11,10 @@ from fastapi import Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import security
+from app.core.config import settings
 from app.core.db import SessionFactory
-from app.services import session_store
-from app.services.errors import SessionInvalid
+from app.services import antireplay, session_store
+from app.services.errors import ReplayDetected, SessionInvalid
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
@@ -25,6 +27,7 @@ class SessionContext:
     key_id: int
     session_id: str
     device_fp_digest: str
+    signing_secret: str
     ip: str | None
 
 
@@ -78,9 +81,57 @@ async def require_session(
         key_id=key_id,
         session_id=session_id,
         device_fp_digest=dfp,
+        signing_secret=live.get("signing_secret", ""),
         ip=client_ip(request),
     )
 
 
+async def require_signed_session(
+    request: Request,
+    ctx: SessionContext = Depends(require_session),
+    x_timestamp: str | None = Header(default=None),
+    x_nonce: str | None = Header(default=None),
+    x_signature: str | None = Header(default=None),
+) -> SessionContext:
+    """Like `require_session`, plus HMAC signature + timestamp/nonce anti-replay.
+
+    The signature is computed with the per-session secret (delivered once at
+    session creation), so a sniffed token alone can't forge or replay a request.
+    """
+    if not settings.request_signing_required:
+        return ctx
+
+    if not (x_timestamp and x_nonce and x_signature):
+        raise SessionInvalid("missing request signature headers")
+
+    # 1. Timestamp must be fresh.
+    try:
+        skew = abs(time.time() - float(x_timestamp))
+    except ValueError as exc:
+        raise SessionInvalid("bad timestamp") from exc
+    if skew > settings.request_signature_max_skew:
+        raise SessionInvalid("stale request")
+
+    # 2. Signature must match (binds method/path/body to this session secret).
+    body = await request.body()
+    expected = security.request_signature(
+        secret=ctx.signing_secret,
+        timestamp=x_timestamp,
+        nonce=x_nonce,
+        method=request.method,
+        path=request.url.path,
+        body=body,
+    )
+    if not security.verify_signature(expected, x_signature):
+        raise SessionInvalid("bad signature")
+
+    # 3. Nonce must be unseen (atomic check-and-store).
+    if not await antireplay.consume_nonce(x_nonce):
+        raise ReplayDetected("nonce already used")
+
+    return ctx
+
+
 DbDep = Depends(get_db)
 SessionDep = Depends(require_session)
+SignedSessionDep = Depends(require_signed_session)

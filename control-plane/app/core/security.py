@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -72,3 +73,30 @@ def create_session_token(
 def decode_session_token(token: str) -> dict:
     """Verify signature + expiry and return claims. Raises jwt exceptions on failure."""
     return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+
+
+# ─── Per-session request signing (anti-replay) ───────────────────────────────
+# The signing secret is delivered ONCE at session creation and never re-sent.
+# A passively sniffed protected request therefore can't be forged (no secret)
+# and can't be replayed (nonce consumed + timestamp skew).
+
+def new_signing_secret() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def request_signature(
+    *,
+    secret: str,
+    timestamp: str,
+    nonce: str,
+    method: str,
+    path: str,
+    body: bytes,
+) -> str:
+    body_digest = hashlib.sha256(body).hexdigest()
+    msg = "\n".join([timestamp, nonce, method.upper(), path, body_digest])
+    return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+
+
+def verify_signature(expected: str, provided: str) -> bool:
+    return hmac.compare_digest(expected, provided)

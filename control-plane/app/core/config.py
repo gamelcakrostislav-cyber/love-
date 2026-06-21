@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Caches / anti-replay
     entitlement_cache_ttl: int = 60
     request_signature_max_skew: int = 30
+    request_signing_required: bool = True
+
+    # Risk scoring
+    impossible_travel_max_kmh: float = 1000.0  # faster than a commercial jet => impossible
 
     # Device policy
     device_register_cooldown_hours: int = 24
