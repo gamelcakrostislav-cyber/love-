@@ -129,6 +129,13 @@ X-Signature = HMAC_SHA256(signing_secret,
     "<timestamp>\n<nonce>\n<METHOD>\n<path>\n<sha256(body)>")
 ```
 
+A ready-to-run reference client does the session exchange **and** request signing
+with no dependencies:
+
+```bash
+python scripts/client_example.py --api-key <YOUR_KEY> --fingerprint my-laptop-001
+```
+
 The nonce is single-use and the timestamp must be within
 `REQUEST_SIGNATURE_MAX_SKEW` seconds, so a sniffed request can't be replayed and
 a sniffed token alone can't forge new ones. (Set `REQUEST_SIGNING_REQUIRED=false`
