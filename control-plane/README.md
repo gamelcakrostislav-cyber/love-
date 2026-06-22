@@ -1,5 +1,8 @@
 # Control Plane & Licensing Layer
 
+> 🆕 **New here / non-technical?** Start with **[QUICKSTART.md](QUICKSTART.md)** —
+> simple step-by-step to run the bot on a Mac.
+
 A Telegram-driven control plane for a SaaS arbitrage product. It handles
 **commerce, licensing, and abuse prevention** around a product engine that does
 not exist yet. The engine is represented by a single stubbed, license-protected
