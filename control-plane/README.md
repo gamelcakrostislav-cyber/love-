@@ -10,6 +10,10 @@ endpoint returning mock arbitrage opportunities.
 > (zero trust). A leaked key alone is useless without passing device + session
 > checks.
 
+> 📓 **Obsidian vault:** a browsable, cross-linked version of this documentation
+> lives in [`docs/vault/`](docs/vault/Home.md) — open that folder as an Obsidian
+> vault for a graph view of the architecture and concepts.
+
 ## Architecture
 
 Three processes share one codebase (`app/core`, `app/models`, `app/services`)
