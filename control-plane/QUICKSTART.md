@@ -72,7 +72,8 @@ open -e .env
 - **BOT_TOKEN** — from **@BotFather** in Telegram (`/newbot`, or `/token` for an
   existing bot). Looks like `123456789:AAH....`
 - **ADMIN_IDS** — your own Telegram number, from **@userinfobot** (it replies with
-  `Id: 1966832731`). This makes you the admin.
+  `Id: 1966832731`). This makes you the admin. For several admins, separate with
+  commas: `ADMIN_IDS=111,222`.
 - **JWT_SECRET** — any long random text (just mash the keyboard, 40+ characters).
 
 Save the file (**Cmd + S**) and close TextEdit.

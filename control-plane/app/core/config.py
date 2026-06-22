@@ -7,9 +7,10 @@ committed. Import the singleton `settings` everywhere; it is parsed once.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -48,7 +49,9 @@ class Settings(BaseSettings):
 
     # Telegram bot
     bot_token: str = "CHANGE_ME"
-    admin_ids: set[int] = Field(default_factory=set)
+    # NoDecode stops pydantic-settings from JSON-decoding the env value before our
+    # validator runs, so a bare "1966832731" or a "111,222" list both work.
+    admin_ids: Annotated[set[int], NoDecode] = Field(default_factory=set)
 
     # Payments
     cryptopay_api_token: str = "CHANGE_ME"
@@ -62,9 +65,20 @@ class Settings(BaseSettings):
     @field_validator("admin_ids", mode="before")
     @classmethod
     def _parse_admin_ids(cls, v: object) -> object:
-        """Accept a comma-separated string from the env (e.g. "111,222")."""
+        """Parse ADMIN_IDS forgivingly.
+
+        Accepts a bare id ("123"), a comma list ("111,222"), a bracketed/JSON-ish
+        form ("[111, 222]"), an int, or an existing iterable. Empty -> empty set.
+        """
+        if v is None or v == "":
+            return set()
+        if isinstance(v, int):
+            return {v}
+        if isinstance(v, (set, list, tuple)):
+            return {int(x) for x in v}
         if isinstance(v, str):
-            return {int(part) for part in v.split(",") if part.strip()}
+            cleaned = v.strip().strip("[]")
+            return {int(part.strip().strip("'\"")) for part in cleaned.split(",") if part.strip()}
         return v
 
 
