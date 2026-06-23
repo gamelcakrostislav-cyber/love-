@@ -21,10 +21,12 @@ from app.core.db import SessionFactory
 from app.models.plan import Plan
 from app.services import devices as devices_svc
 from app.services import (
+    handoff,
     keys,
     payments,
     referrals,
     subscriptions,
+    support,
     users,
 )
 
@@ -37,8 +39,28 @@ HELP_TEXT = (
     "/status — your subscription & expiry\n"
     "/key — show your API key prefix / reissue\n"
     "/devices — manage registered devices\n"
-    "/help — this message"
+    "/human — talk to a real person\n"
+    "/help — this message\n\n"
+    "💬 You can also just <b>ask me a question</b> in plain text — the AI assistant "
+    "will help."
 )
+
+
+async def _escalate(message: Message, user, last_text: str) -> None:
+    """Put a user into human-handoff mode and ping the admins."""
+    await handoff.enter(user.telegram_id)
+    uname = f"@{message.from_user.username}" if message.from_user.username else "(no username)"
+    await handoff.notify_admins(
+        "🆘 <b>Support request</b>\n"
+        f"From: {uname} (id <code>{user.telegram_id}</code>)\n"
+        f"Message: {last_text}\n\n"
+        f"Reply with <code>/reply {user.telegram_id} your message</code>, "
+        f"or <code>/close {user.telegram_id}</code> to end."
+    )
+    await message.answer(
+        "🧑‍💼 Connecting you to a person — someone will reply here shortly. "
+        "Anything you send now goes straight to our team."
+    )
 
 
 async def _active_plans(db) -> list[Plan]:
@@ -240,3 +262,42 @@ async def device_remove(cb: CallbackQuery) -> None:
 @router.callback_query(F.data == "noop")
 async def noop(cb: CallbackQuery) -> None:
     await cb.answer()
+
+
+@router.message(Command("human"))
+async def human_cmd(message: Message) -> None:
+    """Explicitly request a human; relays subsequent messages to admins."""
+    async with SessionFactory() as db:
+        user, _ = await users.get_or_create(
+            db, telegram_id=message.from_user.id, username=message.from_user.username
+        )
+        await db.commit()
+    await _escalate(message, user, "(used /human)")
+
+
+# Catch-all: plain text that isn't a command. Registered LAST so commands win.
+@router.message(F.text & ~F.text.startswith("/"))
+async def support_or_relay(message: Message) -> None:
+    text = message.text or ""
+    async with SessionFactory() as db:
+        user, _ = await users.get_or_create(
+            db, telegram_id=message.from_user.id, username=message.from_user.username
+        )
+        await db.commit()
+
+        # In a human handoff: relay the message to admins instead of the AI.
+        if await handoff.is_active(user.telegram_id):
+            uname = f"@{message.from_user.username}" if message.from_user.username else "(no username)"
+            await handoff.notify_admins(
+                f"💬 <b>{uname}</b> (id <code>{user.telegram_id}</code>): {text}"
+            )
+            await message.answer("✅ Sent to our team.")
+            return
+
+        # Otherwise let the AI assistant answer.
+        await message.bot.send_chat_action(message.chat.id, "typing")
+        result = await support.answer(db, user, text)
+
+    await message.answer(result.reply)
+    if result.needs_human:
+        await _escalate(message, user, text)

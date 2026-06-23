@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     referral_rate_standard: float = 0.20
     referral_rate_blogger: float = 0.30
 
+    # AI support agent (Claude)
+    anthropic_api_key: str = "CHANGE_ME"
+    anthropic_model: str = "claude-opus-4-8"
+    support_ai_enabled: bool = True
+    support_history_turns: int = 10  # how many prior turns to send as context
+
     @field_validator("admin_ids", mode="before")
     @classmethod
     def _parse_admin_ids(cls, v: object) -> object:

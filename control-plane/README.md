@@ -177,6 +177,7 @@ Client commands (aiogram 3.x long-polling):
 | `/status` | subscription, expiry, API-key prefix |
 | `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
 | `/devices` | list registered devices; remove one to free a slot |
+| `/human` | hand off to a human (admins); free text otherwise goes to the AI agent |
 | `/help` | command list |
 
 Referral reward unlocks only when the referred user actually pays (handled at the
@@ -192,6 +193,23 @@ Admin commands (Telegram ids in `ADMIN_IDS`):
 | `/revoke <telegram_id>` | revoke subscription, disable keys, kill sessions |
 | `/flags` | review flagged keys + recent abuse events |
 | `/unflag <key_prefix\|id>` | clear a flag |
+| `/reply <telegram_id> <message>` | answer a user in a human handoff |
+| `/close <telegram_id>` | end a human handoff (user returns to the AI agent) |
+
+## AI support agent
+
+The bot answers free-text questions with an AI support agent (Claude / Anthropic).
+Customers just type a question; the agent replies, grounded in the product docs +
+the user's own subscription status (short Redis-backed memory). It only *answers* —
+it never grants access.
+
+- Set `ANTHROPIC_API_KEY` in `.env` to enable it (leave as `CHANGE_ME` to disable;
+  the bot still runs and gives a fallback reply). Model: `ANTHROPIC_MODEL`
+  (default `claude-opus-4-8`).
+- **Human handoff:** if a user asks for a person (or sends `/human`, or the agent
+  can't help), the user is put into handoff mode, the admins are pinged, and the
+  user's messages are relayed to admins. Admins answer through the bot with
+  `/reply <telegram_id> <message>` and end the chat with `/close <telegram_id>`.
 
 ## Worker
 

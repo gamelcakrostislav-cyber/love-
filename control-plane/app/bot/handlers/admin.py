@@ -25,7 +25,7 @@ from app.models.plan import Plan
 from app.models.session import Session
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.services import activation, revocation, users
+from app.services import activation, handoff, revocation, users
 from app.services.audit import record_audit
 from app.bot import notify
 
@@ -172,3 +172,31 @@ async def unflag_cmd(message: Message, command: CommandObject) -> None:
         )
         await db.commit()
     await message.answer(f"✅ Cleared flag on key id={key.id} (prefix {key.prefix}).")
+
+
+@router.message(Command("reply"))
+async def reply_cmd(message: Message, command: CommandObject) -> None:
+    """/reply <telegram_id> <message> — answer a user in a human handoff."""
+    parts = (command.args or "").split(maxsplit=1)
+    if len(parts) != 2 or not parts[0].isdigit():
+        await message.answer("Usage: /reply &lt;telegram_id&gt; &lt;message&gt;", parse_mode="HTML")
+        return
+    target, text = int(parts[0]), parts[1]
+    await handoff.enter(target)  # ensure the user stays in human mode
+    await notify.send_message(target, f"🧑‍💼 <b>Support:</b> {text}")
+    await message.answer(f"✅ Sent to {target}. (/close {target} to end the chat.)")
+
+
+@router.message(Command("close"))
+async def close_cmd(message: Message, command: CommandObject) -> None:
+    """/close <telegram_id> — end a human handoff; user returns to the AI agent."""
+    arg = (command.args or "").strip()
+    if not arg.isdigit():
+        await message.answer("Usage: /close &lt;telegram_id&gt;", parse_mode="HTML")
+        return
+    target = int(arg)
+    await handoff.exit(target)
+    await notify.send_message(
+        target, "✅ This support chat is closed. Ask me anything and the AI assistant will help again."
+    )
+    await message.answer(f"✅ Closed support chat with {target}.")

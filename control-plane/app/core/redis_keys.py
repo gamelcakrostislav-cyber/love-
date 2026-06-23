@@ -31,3 +31,18 @@ def key_ips(key_id: int) -> str:
 def nonce(value: str) -> str:
     """Seen-nonce marker for anti-replay on signed protected requests."""
     return f"nonce:{value}"
+
+
+def support_history(telegram_id: int) -> str:
+    """Recent AI-support conversation turns for a user (JSON list)."""
+    return f"support:hist:{telegram_id}"
+
+
+def support_human(telegram_id: int) -> str:
+    """Flag: user is in human-handoff mode (messages relayed to admins)."""
+    return f"support:human:{telegram_id}"
+
+
+def support_ratelimit(telegram_id: int) -> str:
+    """Per-user counter capping AI-support calls per minute."""
+    return f"support:rl:{telegram_id}"
