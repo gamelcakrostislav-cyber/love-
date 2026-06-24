@@ -169,9 +169,9 @@ key keeps working until an admin acts (low false-positive cost).
 
 On first `/start` the user **picks a language** (English / Русский / Українська /
 Español / Français) — it localizes the bot and sets the AI's reply language; a
-**persistent button menu** (📋 Plans · 📊 Status · 🔑 Key · 📱 Devices · 🆘 Human ·
-🌐 Language · ❓ Help) replaces typing commands. Change language anytime with
-`/language` or the 🌐 button.
+**persistent button menu** (📋 Plans · 📊 Status · 🔑 Key · 📱 Devices · 🎁 Referrals ·
+🆘 Human · 🌐 Language · ❓ Help) replaces typing commands. Change language anytime
+with `/language` or the 🌐 button.
 
 Client commands (aiogram 3.x long-polling):
 
@@ -183,6 +183,7 @@ Client commands (aiogram 3.x long-polling):
 | `/status` | subscription, expiry, API-key prefix |
 | `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
 | `/devices` | list registered devices; remove one to free a slot |
+| `/referrals` | your invite link + stats (invited / paid / earned) and your rate |
 | `/human` | hand off to a human (admins); free text otherwise goes to the AI agent |
 | `/help` | command list |
 
@@ -226,6 +227,11 @@ subscriptions past `expires_at` → `expired`, their keys disabled, their Redis
 sessions killed, stale session rows reaped. Expiry is therefore enforced
 server-side — the client can never self-extend, and revocation/expiry propagates
 within the entitlement cache window.
+
+It also sends **expiry reminders**: every `EXPIRY_REMINDER_MINUTES` it DMs users
+whose subscription falls into a days-left band (`EXPIRY_REMINDER_DAYS=3,1`),
+localized, with a renew nudge — deduped per band via a Redis marker so nobody is
+spammed. (Plus the Notion reconcile job when enabled.)
 
 ## Notion sync (advanced database / CRM)
 

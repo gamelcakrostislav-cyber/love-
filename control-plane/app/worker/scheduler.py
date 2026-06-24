@@ -15,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
-from app.services import notion_sync, revocation
+from app.services import notion_sync, reminders, revocation
 
 log = get_logger("worker")
 
@@ -27,6 +27,16 @@ async def tick() -> None:
         await db.commit()
     if expired or reaped:
         log.info("expiry sweep: %d subscriptions expired, %d sessions reaped", expired, reaped)
+
+
+async def reminder_tick() -> None:
+    try:
+        async with SessionFactory() as db:
+            sent = await reminders.sweep(db)
+        if sent:
+            log.info("expiry reminders: %d sent", sent)
+    except Exception as exc:  # noqa: BLE001 - reminders must never crash the worker
+        log.warning("reminder sweep failed: %s", exc)
 
 
 async def notion_tick() -> None:
@@ -55,6 +65,17 @@ async def main() -> None:
         max_instances=1,
         coalesce=True,
     )
+    if reminders.is_enabled():
+        scheduler.add_job(
+            reminder_tick,
+            trigger="interval",
+            minutes=max(5, settings.expiry_reminder_minutes),
+            next_run_time=datetime.now(UTC),
+            max_instances=1,
+            coalesce=True,
+        )
+        log.info("expiry reminders enabled — sweep every %d min", settings.expiry_reminder_minutes)
+
     if notion_sync.is_enabled():
         scheduler.add_job(
             notion_tick,

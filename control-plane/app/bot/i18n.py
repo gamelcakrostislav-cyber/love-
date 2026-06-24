@@ -28,11 +28,12 @@ _MENU: dict[str, dict[str, str]] = {
     "status":   {"en": "📊 Status", "ru": "📊 Статус", "uk": "📊 Статус", "es": "📊 Estado", "fr": "📊 Statut"},
     "key":      {"en": "🔑 Key", "ru": "🔑 Ключ", "uk": "🔑 Ключ", "es": "🔑 Clave", "fr": "🔑 Clé"},
     "devices":  {"en": "📱 Devices", "ru": "📱 Устройства", "uk": "📱 Пристрої", "es": "📱 Dispositivos", "fr": "📱 Appareils"},
+    "referrals": {"en": "🎁 Referrals", "ru": "🎁 Рефералы", "uk": "🎁 Реферали", "es": "🎁 Referidos", "fr": "🎁 Parrainage"},
     "human":    {"en": "🆘 Human", "ru": "🆘 Оператор", "uk": "🆘 Оператор", "es": "🆘 Persona", "fr": "🆘 Humain"},
     "language": {"en": "🌐 Language", "ru": "🌐 Язык", "uk": "🌐 Мова", "es": "🌐 Idioma", "fr": "🌐 Langue"},
     "help":     {"en": "❓ Help", "ru": "❓ Помощь", "uk": "❓ Допомога", "es": "❓ Ayuda", "fr": "❓ Aide"},
 }
-MENU_ORDER = ["plans", "status", "key", "devices", "human", "language", "help"]
+MENU_ORDER = ["plans", "status", "key", "devices", "referrals", "human", "language", "help"]
 
 _LABEL_TO_ACTION = {label: action for action, m in _MENU.items() for label in m.values()}
 
@@ -46,11 +47,12 @@ COMMANDS: dict[str, dict[str, str]] = {
     "status":   {"en": "Your subscription & expiry", "ru": "Ваша подписка и срок", "uk": "Ваша підписка та термін", "es": "Tu suscripción y vencimiento", "fr": "Votre abonnement et échéance"},
     "key":      {"en": "Show / reissue API key", "ru": "Показать / перевыпустить ключ", "uk": "Показати / перевипустити ключ", "es": "Ver / reemitir clave API", "fr": "Afficher / réémettre la clé API"},
     "devices":  {"en": "Manage your devices", "ru": "Управление устройствами", "uk": "Керування пристроями", "es": "Gestionar dispositivos", "fr": "Gérer vos appareils"},
+    "referrals": {"en": "Your invite link & earnings", "ru": "Ваша ссылка и доход", "uk": "Ваше посилання та дохід", "es": "Tu enlace y ganancias", "fr": "Votre lien et vos gains"},
     "human":    {"en": "Talk to a real person", "ru": "Связаться с человеком", "uk": "Зв'язатися з людиною", "es": "Hablar con una persona", "fr": "Parler à une personne"},
     "language": {"en": "Change language", "ru": "Сменить язык", "uk": "Змінити мову", "es": "Cambiar idioma", "fr": "Changer de langue"},
     "help":     {"en": "How the bot works", "ru": "Как работает бот", "uk": "Як працює бот", "es": "Cómo funciona el bot", "fr": "Comment le bot fonctionne"},
 }
-COMMAND_ORDER = ["start", "plans", "status", "key", "devices", "human", "language", "help"]
+COMMAND_ORDER = ["start", "plans", "status", "key", "devices", "referrals", "human", "language", "help"]
 
 
 def command_description(command: str, lang: str) -> str:
@@ -92,6 +94,16 @@ STRINGS: dict[str, dict[str, str]] = {
             "🆘 Human — talk to a real person\n"
             "🌐 Language — change language\n\n"
             "💬 You can also just <b>ask a question</b> in plain text — the assistant will help."
+        ),
+        "referrals_block": (
+            "🎁 <b>Referrals</b>\n"
+            "Share your link and earn <b>{rate}%</b> when someone you invite subscribes.\n\n"
+            "🔗 <b>Your invite link:</b>\n{link}\n\n"
+            "👥 Invited: <b>{invited}</b>\n✅ Paid: <b>{qualified}</b>\n💰 Earned: <b>{earned}</b>"
+        ),
+        "reminder_expiring": (
+            "⏳ Your <b>{plan}</b> subscription expires in <b>{days}</b> day(s) — on {date}.\n"
+            "Tap 📋 Plans to renew and keep your access."
         ),
         "plans_header": "<b>📋 Choose a plan</b>\nTap a button below to subscribe. Payment is in crypto and activates automatically.",
         "tier_trial": "trial (opportunities up to 2%)",
@@ -148,6 +160,16 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Язык — сменить язык\n\n"
             "💬 Можно просто <b>задать вопрос</b> текстом — ассистент поможет."
         ),
+        "referrals_block": (
+            "🎁 <b>Рефералы</b>\n"
+            "Делитесь ссылкой и получайте <b>{rate}%</b>, когда приглашённый оформляет подписку.\n\n"
+            "🔗 <b>Ваша реферальная ссылка:</b>\n{link}\n\n"
+            "👥 Приглашено: <b>{invited}</b>\n✅ Оплатили: <b>{qualified}</b>\n💰 Заработано: <b>{earned}</b>"
+        ),
+        "reminder_expiring": (
+            "⏳ Ваша подписка <b>{plan}</b> истекает через <b>{days}</b> дн. — {date}.\n"
+            "Нажмите 📋 Тарифы, чтобы продлить и сохранить доступ."
+        ),
         "plans_header": "<b>📋 Выберите тариф</b>\nНажмите кнопку ниже, чтобы оформить. Оплата в крипте, активация автоматическая.",
         "tier_trial": "пробный (возможности до 2%)",
         "tier_all": "все возможности",
@@ -202,6 +224,16 @@ STRINGS: dict[str, dict[str, str]] = {
             "🆘 Оператор — зв'язатися з людиною\n"
             "🌐 Мова — змінити мову\n\n"
             "💬 Можна просто <b>поставити запитання</b> текстом — асистент допоможе."
+        ),
+        "referrals_block": (
+            "🎁 <b>Реферали</b>\n"
+            "Діліться посиланням і отримуйте <b>{rate}%</b>, коли запрошений оформлює підписку.\n\n"
+            "🔗 <b>Ваше реферальне посилання:</b>\n{link}\n\n"
+            "👥 Запрошено: <b>{invited}</b>\n✅ Оплатили: <b>{qualified}</b>\n💰 Зароблено: <b>{earned}</b>"
+        ),
+        "reminder_expiring": (
+            "⏳ Ваша підписка <b>{plan}</b> спливає через <b>{days}</b> дн. — {date}.\n"
+            "Натисніть 📋 Тарифи, щоб продовжити та зберегти доступ."
         ),
         "plans_header": "<b>📋 Оберіть тариф</b>\nНатисніть кнопку нижче, щоб оформити. Оплата у крипті, активація автоматична.",
         "tier_trial": "пробний (можливості до 2%)",
@@ -258,6 +290,16 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Idioma — cambiar idioma\n\n"
             "💬 También puedes simplemente <b>hacer una pregunta</b> — el asistente te ayudará."
         ),
+        "referrals_block": (
+            "🎁 <b>Referidos</b>\n"
+            "Comparte tu enlace y gana <b>{rate}%</b> cuando alguien que invitas se suscribe.\n\n"
+            "🔗 <b>Tu enlace de invitación:</b>\n{link}\n\n"
+            "👥 Invitados: <b>{invited}</b>\n✅ Pagaron: <b>{qualified}</b>\n💰 Ganado: <b>{earned}</b>"
+        ),
+        "reminder_expiring": (
+            "⏳ Tu suscripción <b>{plan}</b> vence en <b>{days}</b> día(s) — el {date}.\n"
+            "Pulsa 📋 Planes para renovar y mantener tu acceso."
+        ),
         "plans_header": "<b>📋 Elige un plan</b>\nPulsa un botón abajo para suscribirte. El pago es en cripto y se activa automáticamente.",
         "tier_trial": "prueba (oportunidades hasta 2%)",
         "tier_all": "todas las oportunidades",
@@ -312,6 +354,16 @@ STRINGS: dict[str, dict[str, str]] = {
             "🆘 Humain — parler à une vraie personne\n"
             "🌐 Langue — changer de langue\n\n"
             "💬 Vous pouvez aussi simplement <b>poser une question</b> — l'assistant vous aidera."
+        ),
+        "referrals_block": (
+            "🎁 <b>Parrainage</b>\n"
+            "Partagez votre lien et gagnez <b>{rate}%</b> quand une personne invitée s'abonne.\n\n"
+            "🔗 <b>Votre lien de parrainage :</b>\n{link}\n\n"
+            "👥 Invités : <b>{invited}</b>\n✅ Ont payé : <b>{qualified}</b>\n💰 Gagné : <b>{earned}</b>"
+        ),
+        "reminder_expiring": (
+            "⏳ Votre abonnement <b>{plan}</b> expire dans <b>{days}</b> jour(s) — le {date}.\n"
+            "Appuyez sur 📋 Forfaits pour renouveler et garder votre accès."
         ),
         "plans_header": "<b>📋 Choisissez un forfait</b>\nAppuyez sur un bouton ci-dessous pour vous abonner. Le paiement se fait en crypto et s'active automatiquement.",
         "tier_trial": "essai (opportunités jusqu'à 2%)",

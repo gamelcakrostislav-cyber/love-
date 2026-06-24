@@ -61,3 +61,18 @@ def test_onboarding_strings_present_in_every_language():
         assert i18n.t(lang, "welcome")
         assert i18n.t(lang, "welcome_back")
         assert i18n.t(lang, "getting_started")
+
+
+def test_referrals_button_and_strings_in_every_language():
+    assert "referrals" in i18n.MENU_ORDER and "referrals" in i18n.COMMAND_ORDER
+    for lang in i18n.LANGUAGES:
+        assert i18n.button_action(i18n.menu_label("referrals", lang)) == "referrals"
+        block = i18n.t(lang, "referrals_block", rate=20, link="https://t.me/b?start=1",
+                       invited=3, qualified=1, earned="12.50 USD")
+        assert "{" not in block and "}" not in block
+
+
+def test_reminder_string_formats_in_every_language():
+    for lang in i18n.LANGUAGES:
+        out = i18n.t(lang, "reminder_expiring", plan="monthly", days=2, date="2026-07-01")
+        assert "{" not in out and "}" not in out

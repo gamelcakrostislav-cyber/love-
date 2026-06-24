@@ -51,3 +51,8 @@ def support_ratelimit(telegram_id: int) -> str:
 def sync_lock(name: str) -> str:
     """Mutex so only one reconcile run (e.g. Notion) is in flight at a time."""
     return f"lock:sync:{name}"
+
+
+def expiry_reminder(subscription_id: int, days: int) -> str:
+    """Marker that a 'expires in <days>' reminder was already sent for a sub."""
+    return f"reminder:{subscription_id}:{days}"

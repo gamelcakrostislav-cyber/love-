@@ -18,18 +18,27 @@ server-side actions — it never grants [[Entitlement|entitlement]] itself.
 | `/status` | subscription, expiry, [[API Key]] prefix |
 | `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
 | `/devices` | list registered [[Device Fingerprint\|devices]]; remove one to free a slot |
+| `/referrals` | invite link (`?start=<telegram_id>`) + stats (invited/paid/earned) and rate ([[Referral and Rev-Share]]) |
+| `/human` | hand off to a human; free text otherwise → AI agent |
 | `/help` | command list |
+
+The bot also presents a **localized persistent button menu** (5 languages) and a
+native "/" command menu; a 🌐 language picker drives both the UI and the AI's
+reply language.
 
 ## Admin commands
 Gated by an `IsAdmin` filter on `ADMIN_IDS`.
 
 | Command | Action |
 |---|---|
-| `/stats` | active users, sessions, paid revenue, flagged + abuse counts |
+| `/stats` | users (paid vs trial), sessions, revenue, pending, commissions, flags |
+| `/user <id>` | full profile: plan, key, devices, risk, referrals, earnings |
 | `/grant <telegram_id> <plan>` | grant/extend access (reuses webhook activation) |
 | `/revoke <telegram_id>` | revoke subscription, disable keys, kill sessions ([[Worker and Expiry]]) |
 | `/flags` | review flagged keys + recent abuse events ([[Anti-Abuse]]) |
 | `/unflag <key_prefix\|id>` | clear a flag |
+| `/notion [sync]` | [[Notion Sync]] status / force a sync |
+| `/reply <id> <msg>` · `/close <id>` | answer / end a human handoff |
 
 The bot DMs a freshly issued key once (via a transient Bot in the gateway, for
 webhook activation). See [[Runbook]] to configure `BOT_TOKEN` / `ADMIN_IDS`.

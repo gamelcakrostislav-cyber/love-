@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import CallbackQuery, Message
-from sqlalchemy import select
+from aiogram.types import CallbackQuery, LinkPreviewOptions, Message
+from sqlalchemy import func, select
 
 from app.bot import i18n
 from app.bot.keyboards import (
@@ -22,8 +22,11 @@ from app.bot.keyboards import (
     plans_keyboard,
     reissue_confirm_keyboard,
 )
+from app.core.config import settings
 from app.core.db import SessionFactory
+from app.models.enums import ReferralStatus
 from app.models.plan import Plan
+from app.models.referral import Commission, Referral
 from app.services import devices as devices_svc
 from app.services import (
     handoff,
@@ -145,6 +148,33 @@ async def show_help(message: Message, lang: str) -> None:
     await message.answer(i18n.t(lang, "help"), parse_mode="HTML")
 
 
+async def show_referrals(message: Message, lang: str) -> None:
+    me = await message.bot.me()  # cached after first call
+    async with SessionFactory() as db:
+        user = await users.get_by_telegram_id(db, message.from_user.id)
+        if user is None:
+            await message.answer(i18n.t(lang, "no_account"))
+            return
+        invited = await db.scalar(
+            select(func.count()).select_from(Referral)
+            .where(Referral.referrer_user_id == user.id)) or 0
+        qualified = await db.scalar(
+            select(func.count()).select_from(Referral)
+            .where(Referral.referrer_user_id == user.id,
+                   Referral.status == ReferralStatus.QUALIFIED)) or 0
+        earned = await db.scalar(
+            select(func.coalesce(func.sum(Commission.amount), 0))
+            .where(Commission.referrer_user_id == user.id)) or 0
+        is_blogger = user.is_blogger
+    rate = settings.referral_rate_blogger if is_blogger else settings.referral_rate_standard
+    link = f"https://t.me/{me.username}?start={message.from_user.id}"
+    await message.answer(
+        i18n.t(lang, "referrals_block", rate=int(round(rate * 100)), link=link,
+               invited=invited, qualified=qualified, earned=f"{earned} USD"),
+        parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )
+
+
 async def open_language(message: Message) -> None:
     lang = await _user_lang(message.from_user.id)
     await message.answer(i18n.t(lang, "choose_language"), reply_markup=language_keyboard())
@@ -255,6 +285,11 @@ async def key_cmd(message: Message) -> None:
 @router.message(Command("devices"))
 async def devices_cmd(message: Message) -> None:
     await show_devices(message, await _user_lang(message.from_user.id))
+
+
+@router.message(Command("referrals"))
+async def referrals_cmd(message: Message) -> None:
+    await show_referrals(message, await _user_lang(message.from_user.id))
 
 
 @router.message(Command("human"))
@@ -369,6 +404,8 @@ async def support_or_relay(message: Message) -> None:
         await show_key(message, lang); return
     if action == "devices":
         await show_devices(message, lang); return
+    if action == "referrals":
+        await show_referrals(message, lang); return
     if action == "help":
         await show_help(message, lang); return
     if action == "language":

@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     referral_rate_standard: float = 0.20
     referral_rate_blogger: float = 0.30
 
+    # Expiry reminders — DM users before their subscription lapses.
+    expiry_reminders_enabled: bool = True
+    expiry_reminder_days: str = "3,1"   # send a nudge at each of these days-left bands
+    expiry_reminder_minutes: int = 60   # how often the worker sweeps for due reminders
+
     # AI support agent — any OpenAI-compatible provider (default: free Groq)
     support_ai_enabled: bool = True
     support_provider: str = "groq"
