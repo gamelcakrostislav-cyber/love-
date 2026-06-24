@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     expiry_reminder_days: str = "3,1"   # send a nudge at each of these days-left bands
     expiry_reminder_minutes: int = 60   # how often the worker sweeps for due reminders
 
+    # Win-back — DM lapsed users (no active sub) this many days after expiry.
+    winback_enabled: bool = True
+    winback_days: int = 3
+
     # AI support agent — any OpenAI-compatible provider (default: free Groq)
     support_ai_enabled: bool = True
     support_provider: str = "groq"

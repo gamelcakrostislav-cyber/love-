@@ -103,7 +103,12 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "reminder_expiring": (
             "⏳ Your <b>{plan}</b> subscription expires in <b>{days}</b> day(s) — on {date}.\n"
-            "Tap 📋 Plans to renew and keep your access."
+            "Tap below to renew in one tap and keep your access."
+        ),
+        "renew_button": "🔄 Renew {plan}",
+        "winback": (
+            "👋 We miss you! Your <b>{plan}</b> access ended {days} day(s) ago.\n"
+            "Come back any time — tap 📋 Plans to pick up where you left off."
         ),
         "plans_header": "<b>📋 Choose a plan</b>\nTap a button below to subscribe. Payment is in crypto and activates automatically.",
         "tier_trial": "trial (opportunities up to 2%)",
@@ -168,7 +173,12 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "reminder_expiring": (
             "⏳ Ваша подписка <b>{plan}</b> истекает через <b>{days}</b> дн. — {date}.\n"
-            "Нажмите 📋 Тарифы, чтобы продлить и сохранить доступ."
+            "Нажмите ниже, чтобы продлить в один тап и сохранить доступ."
+        ),
+        "renew_button": "🔄 Продлить {plan}",
+        "winback": (
+            "👋 Мы скучаем! Ваш доступ <b>{plan}</b> закончился {days} дн. назад.\n"
+            "Возвращайтесь в любой момент — нажмите 📋 Тарифы, чтобы продолжить."
         ),
         "plans_header": "<b>📋 Выберите тариф</b>\nНажмите кнопку ниже, чтобы оформить. Оплата в крипте, активация автоматическая.",
         "tier_trial": "пробный (возможности до 2%)",
@@ -233,7 +243,12 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "reminder_expiring": (
             "⏳ Ваша підписка <b>{plan}</b> спливає через <b>{days}</b> дн. — {date}.\n"
-            "Натисніть 📋 Тарифи, щоб продовжити та зберегти доступ."
+            "Натисніть нижче, щоб продовжити в один тап і зберегти доступ."
+        ),
+        "renew_button": "🔄 Продовжити {plan}",
+        "winback": (
+            "👋 Ми сумуємо! Ваш доступ <b>{plan}</b> завершився {days} дн. тому.\n"
+            "Повертайтеся будь-коли — натисніть 📋 Тарифи, щоб продовжити."
         ),
         "plans_header": "<b>📋 Оберіть тариф</b>\nНатисніть кнопку нижче, щоб оформити. Оплата у крипті, активація автоматична.",
         "tier_trial": "пробний (можливості до 2%)",
@@ -298,7 +313,12 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "reminder_expiring": (
             "⏳ Tu suscripción <b>{plan}</b> vence en <b>{days}</b> día(s) — el {date}.\n"
-            "Pulsa 📋 Planes para renovar y mantener tu acceso."
+            "Pulsa abajo para renovar en un toque y mantener tu acceso."
+        ),
+        "renew_button": "🔄 Renovar {plan}",
+        "winback": (
+            "👋 ¡Te echamos de menos! Tu acceso <b>{plan}</b> terminó hace {days} día(s).\n"
+            "Vuelve cuando quieras — pulsa 📋 Planes para continuar."
         ),
         "plans_header": "<b>📋 Elige un plan</b>\nPulsa un botón abajo para suscribirte. El pago es en cripto y se activa automáticamente.",
         "tier_trial": "prueba (oportunidades hasta 2%)",
@@ -363,7 +383,12 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "reminder_expiring": (
             "⏳ Votre abonnement <b>{plan}</b> expire dans <b>{days}</b> jour(s) — le {date}.\n"
-            "Appuyez sur 📋 Forfaits pour renouveler et garder votre accès."
+            "Appuyez ci-dessous pour renouveler en un geste et garder votre accès."
+        ),
+        "renew_button": "🔄 Renouveler {plan}",
+        "winback": (
+            "👋 Vous nous manquez ! Votre accès <b>{plan}</b> a pris fin il y a {days} jour(s).\n"
+            "Revenez quand vous voulez — appuyez sur 📋 Forfaits pour continuer."
         ),
         "plans_header": "<b>📋 Choisissez un forfait</b>\nAppuyez sur un bouton ci-dessous pour vous abonner. Le paiement se fait en crypto et s'active automatiquement.",
         "tier_trial": "essai (opportunités jusqu'à 2%)",

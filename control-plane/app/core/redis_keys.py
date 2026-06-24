@@ -56,3 +56,13 @@ def sync_lock(name: str) -> str:
 def expiry_reminder(subscription_id: int, days: int) -> str:
     """Marker that a 'expires in <days>' reminder was already sent for a sub."""
     return f"reminder:{subscription_id}:{days}"
+
+
+def winback(user_id: int) -> str:
+    """Marker that a win-back nudge was already sent to a lapsed user."""
+    return f"winback:{user_id}"
+
+
+def abuse_alert_watermark() -> str:
+    """Highest AbuseEvent id already alerted to admins (so we only alert new ones)."""
+    return "abuse:alert:watermark"

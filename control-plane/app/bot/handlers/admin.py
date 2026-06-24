@@ -7,11 +7,14 @@ activation/revocation services as the payment webhook.
 
 from __future__ import annotations
 
+import asyncio
+import csv
+import io
 from datetime import UTC, datetime
 
 from aiogram import Router
 from aiogram.filters import BaseFilter, Command, CommandObject
-from aiogram.types import LinkPreviewOptions, Message
+from aiogram.types import BufferedInputFile, LinkPreviewOptions, Message
 from sqlalchemy import func, select
 
 from app.core.config import settings
@@ -213,10 +216,64 @@ async def admin_help_cmd(message: Message) -> None:
         "/flags — flagged keys & recent abuse\n"
         "/unflag &lt;prefix|id&gt; — clear a flag\n"
         "/notion [sync] — Notion CRM status / sync now\n"
+        "/broadcast &lt;msg&gt; — message every user\n"
+        "/export — download customers CSV\n"
         "/reply &lt;id&gt; &lt;msg&gt; — answer a support handoff\n"
         "/close &lt;id&gt; — end a support handoff",
         parse_mode="HTML",
     )
+
+
+@router.message(Command("broadcast"))
+async def broadcast_cmd(message: Message, command: CommandObject) -> None:
+    """/broadcast <message> — DM the message (HTML) to every user."""
+    text = (command.args or "").strip()
+    if not text:
+        await message.answer("Usage: /broadcast &lt;message&gt;", parse_mode="HTML")
+        return
+    async with SessionFactory() as db:
+        ids = list(await db.scalars(select(User.telegram_id)))
+    await message.answer(f"📣 Sending to {len(ids)} user(s)…")
+    sent = failed = 0
+    for tid in ids:
+        try:
+            await message.bot.send_message(tid, text)
+            sent += 1
+        except Exception:  # noqa: BLE001 - a blocked/invalid chat must not stop the rest
+            failed += 1
+        await asyncio.sleep(0.05)  # stay well under Telegram's ~30 msg/s limit
+    await message.answer(f"📣 Broadcast done — {sent} sent, {failed} failed.")
+
+
+@router.message(Command("export"))
+async def export_cmd(message: Message) -> None:
+    """/export — send a CSV of all customers (plan, expiry, referrals, earnings)."""
+    now = datetime.now(UTC)
+    async with SessionFactory() as db:
+        users = list(await db.scalars(select(User).order_by(User.id)))
+        active = {
+            uid: (plan, exp) for uid, plan, exp in (await db.execute(
+                select(Subscription.user_id, Plan.name, Subscription.expires_at)
+                .join(Plan, Plan.id == Subscription.plan_id)
+                .where(Subscription.status == SubscriptionStatus.ACTIVE,
+                       Subscription.expires_at > now)
+                .order_by(Subscription.expires_at.desc()))).all()
+        }
+        earnings = dict((await db.execute(
+            select(Commission.referrer_user_id, func.coalesce(func.sum(Commission.amount), 0))
+            .group_by(Commission.referrer_user_id))).all())
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["telegram_id", "username", "language", "plan", "expires",
+                "risk", "blogger", "referred_by", "earned"])
+    for u in users:
+        plan, exp = active.get(u.id, ("", ""))
+        w.writerow([u.telegram_id, u.username or "", u.language, plan,
+                    f"{exp:%Y-%m-%d}" if exp else "", u.risk_score,
+                    "yes" if u.is_blogger else "no", u.referred_by or "",
+                    earnings.get(u.id, 0)])
+    doc = BufferedInputFile(buf.getvalue().encode(), filename=f"customers-{now:%Y%m%d}.csv")
+    await message.answer_document(doc, caption=f"📑 {len(users)} customer(s) exported.")
 
 
 @router.message(Command("grant"))

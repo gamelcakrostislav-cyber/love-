@@ -323,6 +323,13 @@ async def buy_cmd(message: Message, command: CommandObject) -> None:
     await message.answer(text, parse_mode="HTML")
 
 
+@router.callback_query(F.data == "act:plans")
+async def plans_callback(cb: CallbackQuery) -> None:
+    """Inline '📋 Plans' button (used by win-back DMs) → show the plans list."""
+    await show_plans(cb.message, await _user_lang(cb.from_user.id))
+    await cb.answer()
+
+
 @router.callback_query(F.data.startswith("buy:"))
 async def buy_callback(cb: CallbackQuery) -> None:
     plan_name = cb.data.split(":", 1)[1]

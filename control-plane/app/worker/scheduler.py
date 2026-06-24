@@ -15,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
-from app.services import notion_sync, reminders, revocation
+from app.services import alerts, notion_sync, reminders, revocation
 
 log = get_logger("worker")
 
@@ -33,10 +33,21 @@ async def reminder_tick() -> None:
     try:
         async with SessionFactory() as db:
             sent = await reminders.sweep(db)
-        if sent:
-            log.info("expiry reminders: %d sent", sent)
+            back = await reminders.winback_sweep(db)
+        if sent or back:
+            log.info("reminders: %d expiry, %d win-back", sent, back)
     except Exception as exc:  # noqa: BLE001 - reminders must never crash the worker
         log.warning("reminder sweep failed: %s", exc)
+
+
+async def alert_tick() -> None:
+    try:
+        async with SessionFactory() as db:
+            n = await alerts.abuse_sweep(db)
+        if n:
+            log.info("admin alerts: %d abuse events", n)
+    except Exception as exc:  # noqa: BLE001 - alerts must never crash the worker
+        log.warning("alert sweep failed: %s", exc)
 
 
 async def notion_tick() -> None:
@@ -65,7 +76,7 @@ async def main() -> None:
         max_instances=1,
         coalesce=True,
     )
-    if reminders.is_enabled():
+    if reminders.is_enabled() or reminders.winback_enabled():
         scheduler.add_job(
             reminder_tick,
             trigger="interval",
@@ -74,7 +85,14 @@ async def main() -> None:
             max_instances=1,
             coalesce=True,
         )
-        log.info("expiry reminders enabled — sweep every %d min", settings.expiry_reminder_minutes)
+        log.info("reminders enabled — sweep every %d min", settings.expiry_reminder_minutes)
+
+    if alerts.is_enabled():
+        scheduler.add_job(
+            alert_tick, trigger="interval", minutes=2,
+            next_run_time=datetime.now(UTC), max_instances=1, coalesce=True,
+        )
+        log.info("admin abuse alerts enabled — sweep every 2 min")
 
     if notion_sync.is_enabled():
         scheduler.add_job(

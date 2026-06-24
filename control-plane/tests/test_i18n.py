@@ -76,3 +76,10 @@ def test_reminder_string_formats_in_every_language():
     for lang in i18n.LANGUAGES:
         out = i18n.t(lang, "reminder_expiring", plan="monthly", days=2, date="2026-07-01")
         assert "{" not in out and "}" not in out
+
+
+def test_renew_and_winback_strings_in_every_language():
+    for lang in i18n.LANGUAGES:
+        assert "{" not in i18n.t(lang, "renew_button", plan="monthly")
+        out = i18n.t(lang, "winback", plan="monthly", days=3)
+        assert "{" not in out and "}" not in out

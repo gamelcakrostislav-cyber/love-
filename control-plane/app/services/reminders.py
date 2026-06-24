@@ -11,10 +11,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot import i18n
+from app.bot import i18n, notify
 from app.core import redis_keys
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -23,9 +24,19 @@ from app.models.enums import SubscriptionStatus
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.bot import notify
 
 log = get_logger("reminders")
+
+
+def _renew_kb(lang: str, plan_name: str) -> InlineKeyboardMarkup:
+    """One-tap 'Renew <plan>' button → reuses the bot's buy:<plan> callback."""
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=i18n.t(lang, "renew_button", plan=plan_name), callback_data=f"buy:{plan_name}")]])
+
+
+def _plans_kb(lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=i18n.menu_label("plans", lang), callback_data="act:plans")]])
 
 
 def parse_days(raw: str) -> list[int]:
@@ -74,12 +85,59 @@ async def sweep(db: AsyncSession) -> int:
             got = await redis_client.set(marker, "1", nx=True, ex=(high + 2) * 86400)
             if not got:
                 continue
+            lang = i18n.normalize(language)
             days_left = max(1, (expires_at - now).days)
-            text = i18n.t(i18n.normalize(language), "reminder_expiring",
+            text = i18n.t(lang, "reminder_expiring",
                           plan=plan_name, days=days_left, date=f"{expires_at:%Y-%m-%d}")
             try:
-                await notify.send_message(telegram_id, text)
+                await notify.send_message(telegram_id, text, reply_markup=_renew_kb(lang, plan_name))
                 sent += 1
             except Exception as exc:  # noqa: BLE001 - one bad DM must not stop the sweep
                 log.warning("reminder DM to %s failed: %s", telegram_id, exc)
+    return sent
+
+
+def winback_enabled() -> bool:
+    return bool(settings.winback_enabled and settings.winback_days > 0)
+
+
+async def winback_sweep(db: AsyncSession) -> int:
+    """DM users whose access lapsed ~winback_days ago and who haven't renewed."""
+    if not winback_enabled():
+        return 0
+    now = datetime.now(UTC)
+    d = settings.winback_days
+    lo, hi = now - timedelta(days=d + 1), now - timedelta(days=d)
+    # Latest subscription per user that expired in the [d+1, d) days-ago window…
+    rows = (await db.execute(
+        select(Subscription.user_id, func.max(Subscription.expires_at).label("last_exp"))
+        .where(Subscription.expires_at > lo, Subscription.expires_at <= hi)
+        .group_by(Subscription.user_id)
+    )).all()
+    sent = 0
+    for user_id, last_exp in rows:
+        # Skip anyone who currently has an active (renewed) subscription.
+        active = await db.scalar(
+            select(func.count()).select_from(Subscription)
+            .where(Subscription.user_id == user_id,
+                   Subscription.status == SubscriptionStatus.ACTIVE,
+                   Subscription.expires_at > now))
+        if active:
+            continue
+        marker = redis_keys.winback(user_id)
+        if not await redis_client.set(marker, "1", nx=True, ex=(d + 14) * 86400):
+            continue
+        user = await db.get(User, user_id)
+        if user is None:
+            continue
+        plan = await db.scalar(
+            select(Plan.name).join(Subscription, Subscription.plan_id == Plan.id)
+            .where(Subscription.user_id == user_id, Subscription.expires_at == last_exp).limit(1))
+        lang = i18n.normalize(user.language)
+        text = i18n.t(lang, "winback", plan=plan or "subscription", days=d)
+        try:
+            await notify.send_message(user.telegram_id, text, reply_markup=_plans_kb(lang))
+            sent += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("winback DM to %s failed: %s", user.telegram_id, exc)
     return sent
