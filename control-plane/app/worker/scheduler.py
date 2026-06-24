@@ -12,9 +12,10 @@ from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
-from app.services import revocation
+from app.services import notion_sync, revocation
 
 log = get_logger("worker")
 
@@ -28,6 +29,16 @@ async def tick() -> None:
         log.info("expiry sweep: %d subscriptions expired, %d sessions reaped", expired, reaped)
 
 
+async def notion_tick() -> None:
+    try:
+        async with SessionFactory() as db:
+            written = await notion_sync.reconcile(db)
+        if written:
+            log.info("notion sync: %d pages upserted", written)
+    except Exception as exc:  # noqa: BLE001 - sync must never crash the worker
+        log.warning("notion sync failed: %s", exc)
+
+
 async def main() -> None:
     configure_logging()
     scheduler = AsyncIOScheduler(timezone="UTC")
@@ -39,6 +50,17 @@ async def main() -> None:
         max_instances=1,
         coalesce=True,
     )
+    if notion_sync.is_enabled():
+        scheduler.add_job(
+            notion_tick,
+            trigger="interval",
+            minutes=max(1, settings.notion_reconcile_minutes),
+            next_run_time=datetime.now(),  # do an initial sync on boot
+            max_instances=1,
+            coalesce=True,
+        )
+        log.info("notion sync enabled — reconcile every %d min", settings.notion_reconcile_minutes)
+
     scheduler.start()
     log.info("worker started — expiry sweep every minute")
     while True:

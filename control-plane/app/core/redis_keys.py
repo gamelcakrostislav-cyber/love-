@@ -46,3 +46,8 @@ def support_human(telegram_id: int) -> str:
 def support_ratelimit(telegram_id: int) -> str:
     """Per-user counter capping AI-support calls per minute."""
     return f"support:rl:{telegram_id}"
+
+
+def sync_lock(name: str) -> str:
+    """Mutex so only one reconcile run (e.g. Notion) is in flight at a time."""
+    return f"lock:sync:{name}"

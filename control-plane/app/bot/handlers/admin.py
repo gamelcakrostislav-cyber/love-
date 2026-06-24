@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 from aiogram import Router
 from aiogram.filters import BaseFilter, Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import LinkPreviewOptions, Message
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +27,7 @@ from app.models.session import Session
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services import activation, devices as devices_svc
-from app.services import handoff, keys, revocation, subscriptions, users
+from app.services import handoff, keys, notion_sync, revocation, subscriptions, users
 from app.services.audit import record_audit
 from app.bot import notify
 
@@ -153,6 +153,38 @@ async def user_cmd(message: Message, command: CommandObject) -> None:
     )
 
 
+@router.message(Command("notion"))
+async def notion_cmd(message: Message, command: CommandObject) -> None:
+    """/notion — sync status; /notion sync — reconcile to Notion now."""
+    arg = (command.args or "").strip().lower()
+    if not notion_sync.is_enabled():
+        await message.answer(
+            "🔌 <b>Notion sync is off.</b>\n"
+            "Set NOTION_SYNC_ENABLED=true, NOTION_API_KEY and NOTION_PARENT_PAGE_ID "
+            "in .env (see deploy/notion.md), then restart.",
+            parse_mode="HTML",
+        )
+        return
+    if arg == "sync":
+        await message.answer("⏳ Syncing to Notion…")
+        async with SessionFactory() as db:
+            written = await notion_sync.reconcile(db)
+        await message.answer(f"✅ Notion sync done — {written} page(s) created/updated.")
+        return
+    async with SessionFactory() as db:
+        st = await notion_sync.status(db)
+    lines = ["<b>🗂 Notion sync</b>", f"Synced pages: {st['synced_pages']}"]
+    if st["databases"]:
+        lines.append("\n<b>Databases</b>")
+        for key, nid in st["databases"].items():
+            lines.append(f"• <a href=\"{notion_sync.page_url(nid)}\">{key}</a>")
+    else:
+        lines.append("No databases yet — run <code>/notion sync</code> to create them.")
+    lines.append("\nRun <code>/notion sync</code> to push the latest data now.")
+    await message.answer("\n".join(lines), parse_mode="HTML",
+                         link_preview_options=LinkPreviewOptions(is_disabled=True))
+
+
 @router.message(Command("admin"))
 async def admin_help_cmd(message: Message) -> None:
     await message.answer(
@@ -163,6 +195,7 @@ async def admin_help_cmd(message: Message) -> None:
         "/revoke &lt;id&gt; — kill keys & sessions\n"
         "/flags — flagged keys & recent abuse\n"
         "/unflag &lt;prefix|id&gt; — clear a flag\n"
+        "/notion [sync] — Notion CRM status / sync now\n"
         "/reply &lt;id&gt; &lt;msg&gt; — answer a support handoff\n"
         "/close &lt;id&gt; — end a support handoff",
         parse_mode="HTML",

@@ -227,6 +227,26 @@ sessions killed, stale session rows reaped. Expiry is therefore enforced
 server-side — the client can never self-extend, and revocation/expiry propagates
 within the entitlement cache window.
 
+## Notion sync (advanced database / CRM)
+
+Optionally mirror your whole business into a **Notion workspace** as six linked
+databases — **Customers, Payments, Subscriptions, Referrals, Commissions, Flags &
+Abuse** — so you get a rich, filterable dashboard without touching SQL.
+
+- **Auto-provisioned:** on first run the worker creates the databases under a
+  parent page you share with the integration, and remembers their ids (in the
+  `notion_sync` table). No manual table-building.
+- **Linked, not flat:** child rows (payments, subscriptions, flags…) carry a
+  Notion *relation* back to their Customer, so you get real roll-ups and views.
+- **One-way & best-effort:** a worker job reconciles every
+  `NOTION_RECONCILE_MINUTES` (default 3). Unchanged rows are skipped via a stored
+  content hash; a Redis lock prevents overlapping runs; a per-run write budget
+  keeps us under Notion's ~3 req/s; every call is guarded so a Notion outage
+  never affects the bot.
+- **Off by default:** set `NOTION_SYNC_ENABLED=true`, `NOTION_API_KEY` and
+  `NOTION_PARENT_PAGE_ID` to enable. Admins check status / force a sync with
+  `/notion` and `/notion sync`. Step-by-step setup: [`deploy/notion.md`](deploy/notion.md).
+
 ## Payments
 
 `PaymentProvider` abstraction with a **Crypto Pay** (`@CryptoBot`) implementation

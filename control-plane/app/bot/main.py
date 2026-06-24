@@ -44,6 +44,7 @@ _ADMIN_COMMANDS: list[tuple[str, str]] = [
     ("revoke", "Revoke access"),
     ("flags", "Flagged keys & abuse"),
     ("unflag", "Clear a flag"),
+    ("notion", "Notion CRM status / sync"),
     ("reply", "Reply in a support handoff"),
     ("close", "Close a support handoff"),
     ("admin", "List admin commands"),

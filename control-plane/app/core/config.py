@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     support_base_url: str = "https://api.groq.com/openai/v1"
     support_history_turns: int = 10  # how many prior turns to send as context
 
+    # Notion sync — mirror business data into an auto-built Notion CRM/dashboard.
+    # Disabled until NOTION_API_KEY is set (and != CHANGE_ME) and a parent page id
+    # is provided. The worker reconciles every notion_reconcile_minutes.
+    notion_sync_enabled: bool = False
+    notion_api_key: str = "CHANGE_ME"
+    notion_parent_page_id: str = ""
+    notion_api_base: str = "https://api.notion.com/v1"
+    notion_version: str = "2022-06-28"
+    notion_reconcile_minutes: int = 3
+
     @field_validator("admin_ids", mode="before")
     @classmethod
     def _parse_admin_ids(cls, v: object) -> object:
