@@ -8,7 +8,7 @@ makes expiry server-enforced — the client can never self-extend.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -33,7 +33,7 @@ async def notion_tick() -> None:
     try:
         async with SessionFactory() as db:
             written = await notion_sync.reconcile(db)
-        if written:
+        if written:  # None (lock held) and 0 (nothing to do) are both quiet
             log.info("notion sync: %d pages upserted", written)
     except Exception as exc:  # noqa: BLE001 - sync must never crash the worker
         log.warning("notion sync failed: %s", exc)
@@ -46,7 +46,7 @@ async def main() -> None:
         tick,
         trigger="interval",
         minutes=1,
-        next_run_time=datetime.now(),  # run immediately on boot
+        next_run_time=datetime.now(UTC),  # run immediately on boot (UTC-aware)
         max_instances=1,
         coalesce=True,
     )
@@ -55,7 +55,7 @@ async def main() -> None:
             notion_tick,
             trigger="interval",
             minutes=max(1, settings.notion_reconcile_minutes),
-            next_run_time=datetime.now(),  # do an initial sync on boot
+            next_run_time=datetime.now(UTC),  # do an initial sync on boot (UTC-aware)
             max_instances=1,
             coalesce=True,
         )

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import SessionFactory
+from app.core.logging import get_logger
 from app.models.abuse_event import AbuseEvent
 from app.models.api_key import ApiKey
 from app.models.enums import PaymentStatus, SubscriptionStatus
@@ -32,6 +33,7 @@ from app.services.audit import record_audit
 from app.bot import notify
 
 router = Router(name="admin")
+log = get_logger("admin")
 
 
 class IsAdmin(BaseFilter):
@@ -167,12 +169,25 @@ async def notion_cmd(message: Message, command: CommandObject) -> None:
         return
     if arg == "sync":
         await message.answer("⏳ Syncing to Notion…")
-        async with SessionFactory() as db:
-            written = await notion_sync.reconcile(db)
-        await message.answer(f"✅ Notion sync done — {written} page(s) created/updated.")
+        try:
+            async with SessionFactory() as db:
+                written = await notion_sync.reconcile(db)
+        except Exception as exc:  # noqa: BLE001 - report, never crash the command
+            log.warning("/notion sync failed: %s", exc)
+            await message.answer("⚠️ Notion sync failed — see logs.")
+            return
+        if written is None:
+            await message.answer("⏳ A Notion sync is already running — try again shortly.")
+        else:
+            await message.answer(f"✅ Notion sync done — {written} page(s) created/updated.")
         return
-    async with SessionFactory() as db:
-        st = await notion_sync.status(db)
+    try:
+        async with SessionFactory() as db:
+            st = await notion_sync.status(db)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("/notion status failed: %s", exc)
+        await message.answer("⚠️ Could not read Notion status — see logs.")
+        return
     lines = ["<b>🗂 Notion sync</b>", f"Synced pages: {st['synced_pages']}"]
     if st["databases"]:
         lines.append("\n<b>Databases</b>")

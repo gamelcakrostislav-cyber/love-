@@ -219,6 +219,12 @@ async def _upsert(db, mappings, budget, *, kind, ref, db_id, props) -> str | Non
             return None
         row = NotionSync(kind=kind, ref=ref, notion_id=page_id, content_hash=h)
         db.add(row)
+        # Persist the mapping the instant the remote page exists. Notion's
+        # page-create has no idempotency key, so a crash between create and a
+        # batched commit would re-create the page next run. A commit per *create*
+        # (bounded by the write budget) closes that window. Updates are
+        # idempotent on page_id, so they ride the per-phase commit.
+        await db.commit()
         mappings[(kind, ref)] = row
         budget.left -= 1
         return page_id
@@ -252,11 +258,11 @@ async def _ensure_databases(db, mappings) -> dict[str, str] | None:
             return None
         row = NotionSync(kind="database", ref=key, notion_id=db_id, content_hash=None)
         db.add(row)
+        await db.commit()  # durable before the NEXT create_database/page references it
         mappings[("database", key)] = row
         ids[key] = db_id
         created = True
     if created:
-        await db.commit()  # persist db ids before any pages reference them
         log.info("notion: ensured %d databases", len(ids))
     return ids
 
@@ -307,14 +313,18 @@ async def _customer_aggregates(db, now: datetime):
     return active, prefixes, devices, referrals, earnings
 
 
-async def reconcile(db: AsyncSession) -> int:
-    """Push new/changed rows to Notion. Returns the number of pages written."""
+async def reconcile(db: AsyncSession) -> int | None:
+    """Push new/changed rows to Notion.
+
+    Returns the number of pages written, or None if another run holds the lock
+    (so callers can tell "already running" apart from "ran, nothing to do").
+    """
     if not is_enabled():
         return 0
 
     got = await redis_client.set(redis_keys.sync_lock("notion"), "1", nx=True, ex=_LOCK_TTL)
     if not got:
-        return 0
+        return None
     try:
         now = datetime.now(UTC)
         mappings = await _load_mappings(db)
@@ -343,12 +353,21 @@ async def reconcile(db: AsyncSession) -> int:
 
         plan_names = dict((await db.execute(select(Plan.id, Plan.name))).all())
 
+        # Child rows carry a relation to their Customer. If that customer hasn't
+        # been synced yet (deferred earlier by the write budget, or just-created
+        # concurrently), we *skip* the child this pass rather than writing an
+        # empty relation — it syncs on a later pass once the customer exists.
+        # This keeps relations correct instead of permanently empty.
+
         # 2) Payments (build payment page map for commissions).
         payment_pages: dict[int, str] = {}
         payments = list(await db.scalars(
             select(Payment).order_by(Payment.id.desc()).limit(_SCAN_LIMIT)))
         for p in payments:
-            props = payment_props(p, customer_page=user_pages.get(p.user_id))
+            cp = user_pages.get(p.user_id)
+            if cp is None:
+                continue
+            props = payment_props(p, customer_page=cp)
             pid = await _upsert(db, mappings, budget, kind="payment", ref=str(p.id),
                                 db_id=ids["payments"], props=props)
             if pid:
@@ -359,37 +378,50 @@ async def reconcile(db: AsyncSession) -> int:
         subs = list(await db.scalars(
             select(Subscription).order_by(Subscription.id.desc()).limit(_SCAN_LIMIT)))
         for s in subs:
-            props = subscription_props(s, customer_page=user_pages.get(s.user_id),
-                                       plan_name=plan_names.get(s.plan_id))
+            cp = user_pages.get(s.user_id)
+            if cp is None:
+                continue
+            props = subscription_props(s, customer_page=cp, plan_name=plan_names.get(s.plan_id))
             await _upsert(db, mappings, budget, kind="subscription", ref=str(s.id),
                           db_id=ids["subscriptions"], props=props)
         await db.commit()
 
-        # 4) Referrals.
+        # 4) Referrals (need both endpoints' customer pages).
         refs = list(await db.scalars(
             select(Referral).order_by(Referral.id.desc()).limit(_SCAN_LIMIT)))
         for r in refs:
-            props = referral_props(r, referrer_page=user_pages.get(r.referrer_user_id),
-                                   referred_page=user_pages.get(r.referred_user_id))
+            rp = user_pages.get(r.referrer_user_id)
+            rdp = user_pages.get(r.referred_user_id)
+            if rp is None or rdp is None:
+                continue
+            props = referral_props(r, referrer_page=rp, referred_page=rdp)
             await _upsert(db, mappings, budget, kind="referral", ref=str(r.id),
                           db_id=ids["referrals"], props=props)
         await db.commit()
 
-        # 5) Commissions.
+        # 5) Commissions (anchored on the referrer customer; payment link is
+        #    secondary and filled in when that payment has been synced).
         coms = list(await db.scalars(
             select(Commission).order_by(Commission.id.desc()).limit(_SCAN_LIMIT)))
         for c in coms:
-            props = commission_props(c, referrer_page=user_pages.get(c.referrer_user_id),
+            rp = user_pages.get(c.referrer_user_id)
+            if rp is None:
+                continue
+            props = commission_props(c, referrer_page=rp,
                                      payment_page=payment_pages.get(c.payment_id))
             await _upsert(db, mappings, budget, kind="commission", ref=str(c.id),
                           db_id=ids["commissions"], props=props)
         await db.commit()
 
-        # 6) Flags / abuse events.
+        # 6) Flags / abuse events (user_id may legitimately be NULL -> no customer).
         evs = list(await db.scalars(
             select(AbuseEvent).order_by(AbuseEvent.id.desc()).limit(_SCAN_LIMIT)))
         for e in evs:
-            cp = user_pages.get(e.user_id) if e.user_id else None
+            cp = None
+            if e.user_id is not None:
+                cp = user_pages.get(e.user_id)
+                if cp is None:
+                    continue  # has a customer, just not synced yet — defer
             props = abuse_props(e, customer_page=cp)
             await _upsert(db, mappings, budget, kind="abuse", ref=str(e.id),
                           db_id=ids["flags"], props=props)
