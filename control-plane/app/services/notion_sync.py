@@ -637,7 +637,17 @@ async def push_user(db: AsyncSession, user_id: int) -> None:
 
 
 # ─── Two-way control: apply actions set from a Notion Customer row ───────────
-async def _apply_one(db, user_id: int, spec: tuple[str, object]) -> None:
+async def _notify_safe(telegram_id: int, text: str) -> None:
+    """DM the user without ever letting a notify/format issue mark an action failed."""
+    try:
+        await notify.send_message(telegram_id, text)
+    except Exception as exc:  # noqa: BLE001 - the action already committed; DM is extra
+        log.warning("notion action notify failed for %s: %s", telegram_id, exc)
+
+
+async def _apply_one(db, user_id: int, spec: tuple[str, object], actor: str) -> None:
+    """Apply one action via the server-side path. The DB commit is the success
+    point; DMs run only after and can never turn a committed action into a failure."""
     kind, arg = spec
     user = await db.get(User, user_id)
     if user is None:
@@ -646,21 +656,21 @@ async def _apply_one(db, user_id: int, spec: tuple[str, object]) -> None:
         plan = await db.scalar(select(Plan).where(Plan.name == arg))
         if plan is None:
             return
-        result = await activation.grant(db, user=user, plan=plan, payment=None, actor="notion")
+        result = await activation.grant(db, user=user, plan=plan, payment=None, actor=actor)
         await db.commit()
         msg = (f"🎁 You've been granted <b>{result.plan_name}</b> until "
                f"{result.expires_at:%Y-%m-%d}.")
         if result.new_key_raw:
             msg += f"\n\n🔑 <b>Your API key (shown once):</b>\n<code>{result.new_key_raw}</code>"
-        await notify.send_message(user.telegram_id, msg)
+        await _notify_safe(user.telegram_id, msg)
     elif kind == "revoke":
-        await revocation.revoke_user(db, user_id=user.id, actor="notion")
+        await revocation.revoke_user(db, user_id=user.id, actor=actor)
         await db.commit()
-        await notify.send_message(
+        await _notify_safe(
             user.telegram_id, "⚠️ Your access has been revoked. Contact support if unexpected.")
     elif kind == "blogger":
         user.is_blogger = bool(arg)
-        await record_audit(db, actor="notion", action="set_blogger",
+        await record_audit(db, actor=actor, action="set_blogger",
                            target=str(user.id), meta={"value": bool(arg)})
         await db.commit()
 
@@ -678,8 +688,18 @@ async def apply_actions(db: AsyncSession) -> int:
     cust_db = mappings.get(("database", "customers"))
     if cust_db is None:
         return 0
-    page_to_user = {r.notion_id: int(r.ref)
-                    for (kind, _ref), r in mappings.items() if kind == "customer"}
+    # Reverse map page -> user. notion_id is unique by construction; if a
+    # duplicate ever appears (data corruption / restored row) mark it ambiguous
+    # so we never apply an action to the wrong user.
+    page_to_user: dict[str, int | None] = {}
+    for (kind, ref), r in mappings.items():
+        if kind != "customer":
+            continue
+        if r.notion_id in page_to_user:
+            log.warning("notion: duplicate page id %s across customer rows — skipping", r.notion_id)
+            page_to_user[r.notion_id] = None
+            continue
+        page_to_user[r.notion_id] = int(ref)
     try:
         pages = await n.query_database(
             cust_db.notion_id,
@@ -697,6 +717,9 @@ async def apply_actions(db: AsyncSession) -> int:
         user_id = page_to_user.get(pid)
         if user_id is None:
             continue
+        # Attribute to the Notion user who set the field, when available.
+        editor = (page.get("last_edited_by") or {}).get("id")
+        actor = f"notion:{editor}" if editor else "notion"
         # Reset-first (fail-safe: never double-apply on a later poll).
         try:
             await n.update_page(pid, properties={
@@ -707,11 +730,18 @@ async def apply_actions(db: AsyncSession) -> int:
             log.warning("notion reset action failed for %s: %s", pid, exc)
             continue
         try:
-            await _apply_one(db, user_id, _ACTIONS[action])
+            await _apply_one(db, user_id, _ACTIONS[action], actor)
             applied += 1
             log.info("notion action %s applied to user %s", action, user_id)
         except Exception as exc:  # noqa: BLE001
-            log.warning("notion action %s for user %s failed: %s", action, user_id, exc)
+            # Reset already cleared the field, so this won't double-apply; surface
+            # the failure to the owner instead of silently dropping it.
+            log.error("notion action %s for user %s failed: %s", action, user_id, exc)
+            try:
+                await n.update_page(pid, properties={
+                    "Last Action": n.text(f"{action} FAILED @ {now_str()}")})
+            except Exception:  # noqa: BLE001
+                pass
     return applied
 
 
