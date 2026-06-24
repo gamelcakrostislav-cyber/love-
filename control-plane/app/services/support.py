@@ -17,12 +17,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import redis_keys
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.redis import redis_client
+from app.models.abuse_event import AbuseEvent
+from app.models.api_key import ApiKey
+from app.models.device import Device
+from app.models.enums import DeviceStatus, ReferralStatus
+from app.models.referral import Commission, Referral
 from app.models.user import User
 from app.services import keys, subscriptions
 
@@ -174,16 +180,54 @@ async def clear_history(telegram_id: int) -> None:
 
 
 async def _user_context(db: AsyncSession, user: User) -> str:
-    """A short, factual status line the model can use for personal answers."""
+    """A rich, factual account snapshot the model uses to answer personal questions
+    accurately ("days left?", "how much have I earned?", "why is my device blocked?")."""
+    now = datetime.now(UTC)
     active = await subscriptions.get_active_with_plan(db, user.id)
     key = await keys.get_active_key(db, user.id)
+
+    lines: list[str] = []
     if active is None:
-        sub_line = "Subscription: none active (suggest /plans)."
+        lines.append("Subscription: none active (they should tap 📋 Plans; trial is free).")
     else:
         sub, plan = active
-        sub_line = f"Subscription: {plan.name}, expires {sub.expires_at:%Y-%m-%d}."
-    key_line = f"API key prefix: {key.prefix}…" if key else "API key: not issued yet."
-    return f"[Account — {sub_line} {key_line}]"
+        days = max(0, (sub.expires_at - now).days)
+        lines.append(
+            f"Subscription: {plan.name} ({sub.status}), expires {sub.expires_at:%Y-%m-%d} "
+            f"(~{days} days left). Plan allows {plan.max_devices} device(s), "
+            f"{plan.max_concurrent_sessions} concurrent session(s), {plan.rate_limit_per_min}/min.")
+
+    if key is None:
+        lines.append("API key: not issued yet.")
+    else:
+        devices = list(await db.scalars(
+            select(Device).join(ApiKey, ApiKey.id == Device.key_id)
+            .where(ApiKey.user_id == user.id, Device.status != DeviceStatus.REMOVED)))
+        cooling = [d for d in devices if d.status == DeviceStatus.COOLDOWN]
+        flag = " (FLAGGED for review)" if key.flagged else ""
+        lines.append(f"API key prefix: {key.prefix}…{flag}. Devices: {len(devices)}"
+                     + (f", {len(cooling)} in 24h cooldown" if cooling else "") + ".")
+
+    invited = await db.scalar(
+        select(func.count()).select_from(Referral).where(Referral.referrer_user_id == user.id)) or 0
+    if invited:
+        paid = await db.scalar(
+            select(func.count()).select_from(Referral)
+            .where(Referral.referrer_user_id == user.id,
+                   Referral.status == ReferralStatus.QUALIFIED)) or 0
+        earned = await db.scalar(
+            select(func.coalesce(func.sum(Commission.amount), 0))
+            .where(Commission.referrer_user_id == user.id)) or 0
+        lines.append(f"Referrals: invited {invited}, paid {paid}, earned {earned} USD.")
+
+    recent_flags = list(await db.scalars(
+        select(AbuseEvent.type).where(AbuseEvent.user_id == user.id)
+        .order_by(AbuseEvent.created_at.desc()).limit(3)))
+    if recent_flags:
+        lines.append("Recent anti-abuse flags (explain these as protective, not bans): "
+                     + ", ".join(recent_flags) + ".")
+
+    return "[Account snapshot — answer personal questions from this; never invent data]\n" + "\n".join(lines)
 
 
 async def answer(db: AsyncSession, user: User, text: str) -> SupportResult:

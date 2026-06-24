@@ -13,7 +13,6 @@ different loop" pitfalls.
 
 from __future__ import annotations
 
-import asyncio
 import os
 
 # Must be set before any app import so the settings singleton picks them up.
@@ -28,7 +27,6 @@ os.environ.setdefault("CRYPTOPAY_API_TOKEN", "test-token")
 os.environ.setdefault("BOT_TOKEN", "CHANGE_ME")
 
 import asyncpg  # noqa: E402
-import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
@@ -42,13 +40,6 @@ from app.core.redis import redis_client  # noqa: E402
 
 test_engine = create_async_engine(settings.database_url, poolclass=NullPool)
 TestSession = async_sessionmaker(test_engine, expire_on_commit=False, autoflush=False)
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 async def _ensure_database() -> None:

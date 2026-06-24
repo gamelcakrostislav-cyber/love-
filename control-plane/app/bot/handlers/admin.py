@@ -13,7 +13,6 @@ from aiogram import Router
 from aiogram.filters import BaseFilter, Command, CommandObject
 from aiogram.types import LinkPreviewOptions, Message
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import SessionFactory

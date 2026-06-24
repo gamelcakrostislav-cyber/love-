@@ -397,19 +397,26 @@ async def support_or_relay(message: Message) -> None:
         await _human_flow(message)
         return
     if action == "plans":
-        await show_plans(message, lang); return
+        await show_plans(message, lang)
+        return
     if action == "status":
-        await show_status(message, lang); return
+        await show_status(message, lang)
+        return
     if action == "key":
-        await show_key(message, lang); return
+        await show_key(message, lang)
+        return
     if action == "devices":
-        await show_devices(message, lang); return
+        await show_devices(message, lang)
+        return
     if action == "referrals":
-        await show_referrals(message, lang); return
+        await show_referrals(message, lang)
+        return
     if action == "help":
-        await show_help(message, lang); return
+        await show_help(message, lang)
+        return
     if action == "language":
-        await open_language(message); return
+        await open_language(message)
+        return
 
     # 2. Human handoff: relay to admins.
     if relaying:

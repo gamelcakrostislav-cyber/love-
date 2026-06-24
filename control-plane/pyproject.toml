@@ -33,6 +33,11 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Share ONE event loop across the whole session so the module-level async
+# singletons (redis_client, engine) stay bound to a single loop. pytest-asyncio
+# 1.x dropped the old custom `event_loop` fixture override this suite relied on.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
