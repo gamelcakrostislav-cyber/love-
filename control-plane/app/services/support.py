@@ -1,10 +1,13 @@
-"""AI support agent backed by Claude (Anthropic).
+"""AI support agent backed by a free, OpenAI-compatible LLM (default: Groq).
 
-A single Messages API call answers product/support questions, grounded in a
+A single chat-completions call answers product/support questions, grounded in a
 system prompt + the user's own subscription status, with short Redis-backed
 conversation memory. The agent only *answers* — it never grants access. When the
 user needs a human (asks for one, or the model can't help) the reply carries an
 `<ESCALATE>` sentinel, which the bot turns into a human handoff.
+
+Works with any OpenAI-compatible endpoint (Groq, OpenAI, OpenRouter, …) via the
+`SUPPORT_*` settings — no provider SDK required, just `httpx`.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import redis_keys
@@ -74,21 +78,39 @@ class SupportResult:
 def is_enabled() -> bool:
     return bool(
         settings.support_ai_enabled
-        and settings.anthropic_api_key
-        and settings.anthropic_api_key != "CHANGE_ME"
+        and settings.support_api_key
+        and settings.support_api_key != "CHANGE_ME"
     )
 
 
-_client = None
+_client: httpx.AsyncClient | None = None
 
 
-def _get_client():
+def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        from anthropic import AsyncAnthropic  # imported lazily; declared dep
-
-        _client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        _client = httpx.AsyncClient(
+            base_url=settings.support_base_url.rstrip("/"),
+            headers={"Authorization": f"Bearer {settings.support_api_key}"},
+            timeout=30.0,
+        )
     return _client
+
+
+async def _complete(messages: list[dict]) -> str:
+    """Call the OpenAI-compatible chat-completions endpoint; return reply text."""
+    resp = await _get_client().post(
+        "/chat/completions",
+        json={
+            "model": settings.support_model,
+            "messages": messages,
+            "max_tokens": 1024,
+            "temperature": 0.3,
+        },
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data["choices"][0]["message"]["content"] or ""
 
 
 async def _allow_rate(telegram_id: int) -> bool:
@@ -156,25 +178,20 @@ async def answer(db: AsyncSession, user: User, text: str) -> SupportResult:
     history = await _load_history(user.telegram_id)
     context = await _user_context(db, user)
     messages = [
+        {"role": "system", "content": SUPPORT_SYSTEM_PROMPT},
         *history,
         {"role": "user", "content": f"{context}\n\n{text}"},
     ]
 
     try:
-        resp = await _get_client().messages.create(
-            model=settings.anthropic_model,
-            max_tokens=1024,
-            system=SUPPORT_SYSTEM_PROMPT,
-            messages=messages,
-        )
+        raw = await _complete(messages)
     except Exception as exc:  # noqa: BLE001 - never crash the bot on an API error
-        log.warning("claude support call failed: %s", exc)
+        log.warning("support LLM call failed: %s", exc)
         return SupportResult(
             reply="Sorry, I'm having trouble right now. Try again shortly, or /human for a person.",
             needs_human=False,
         )
 
-    raw = "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", "") == "text")
     reply, needs_human = parse_escalation(raw)
     if not reply:
         reply = "I'm not sure how to help with that — connecting you to a person."

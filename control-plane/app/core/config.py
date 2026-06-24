@@ -62,10 +62,12 @@ class Settings(BaseSettings):
     referral_rate_standard: float = 0.20
     referral_rate_blogger: float = 0.30
 
-    # AI support agent (Claude)
-    anthropic_api_key: str = "CHANGE_ME"
-    anthropic_model: str = "claude-opus-4-8"
+    # AI support agent — any OpenAI-compatible provider (default: free Groq)
     support_ai_enabled: bool = True
+    support_provider: str = "groq"
+    support_api_key: str = "CHANGE_ME"
+    support_model: str = "llama-3.3-70b-versatile"
+    support_base_url: str = "https://api.groq.com/openai/v1"
     support_history_turns: int = 10  # how many prior turns to send as context
 
     @field_validator("admin_ids", mode="before")

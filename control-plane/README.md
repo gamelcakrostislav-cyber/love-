@@ -198,14 +198,16 @@ Admin commands (Telegram ids in `ADMIN_IDS`):
 
 ## AI support agent
 
-The bot answers free-text questions with an AI support agent (Claude / Anthropic).
-Customers just type a question; the agent replies, grounded in the product docs +
-the user's own subscription status (short Redis-backed memory). It only *answers* —
-it never grants access.
+The bot answers free-text questions with an AI support agent. Customers just type
+a question; the agent replies, grounded in the product docs + the user's own
+subscription status (short Redis-backed memory). It only *answers* — it never
+grants access.
 
-- Set `ANTHROPIC_API_KEY` in `.env` to enable it (leave as `CHANGE_ME` to disable;
-  the bot still runs and gives a fallback reply). Model: `ANTHROPIC_MODEL`
-  (default `claude-opus-4-8`).
+- Any **OpenAI-compatible** provider works via the `SUPPORT_*` env vars. Default
+  is **free Groq** — get a no-credit-card key at
+  [console.groq.com/keys](https://console.groq.com/keys) and set `SUPPORT_API_KEY`.
+  Leave it as `CHANGE_ME` to disable (the bot still runs with a fallback reply).
+  Swap provider by changing `SUPPORT_BASE_URL` / `SUPPORT_MODEL` (OpenAI, OpenRouter…).
 - **Human handoff:** if a user asks for a person (or sends `/human`, or the agent
   can't help), the user is put into handoff mode, the admins are pinged, and the
   user's messages are relayed to admins. Admins answer through the bot with
