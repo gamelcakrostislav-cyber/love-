@@ -167,6 +167,12 @@ key keeps working until an admin acts (low false-positive cost).
 
 ## Telegram bot
 
+On first `/start` the user **picks a language** (English / Русский / Українська /
+Español / Français) — it localizes the bot and sets the AI's reply language; a
+**persistent button menu** (📋 Plans · 📊 Status · 🔑 Key · 📱 Devices · 🆘 Human ·
+🌐 Language · ❓ Help) replaces typing commands. Change language anytime with
+`/language` or the 🌐 button.
+
 Client commands (aiogram 3.x long-polling):
 
 | Command | Action |

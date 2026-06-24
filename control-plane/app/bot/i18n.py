@@ -1,0 +1,282 @@
+"""Lightweight i18n for the client bot (en / ru / uk / es / fr).
+
+`t(lang, key, **kwargs)` returns a translated string (English fallback).
+Menu button labels double as routing keys: `button_action(text)` maps any
+localized label back to its action so taps work in every language.
+"""
+
+from __future__ import annotations
+
+LANGUAGES: dict[str, str] = {
+    "en": "English",
+    "ru": "Русский",
+    "uk": "Українська",
+    "es": "Español",
+    "fr": "Français",
+}
+DEFAULT_LANG = "en"
+
+
+def normalize(lang: str | None) -> str:
+    return lang if lang in LANGUAGES else DEFAULT_LANG
+
+
+# ─── Menu buttons (persistent reply keyboard) ────────────────────────────────
+# action -> {lang: label}. Emoji stays constant; only the word is translated.
+_MENU: dict[str, dict[str, str]] = {
+    "plans":    {"en": "📋 Plans", "ru": "📋 Тарифы", "uk": "📋 Тарифи", "es": "📋 Planes", "fr": "📋 Forfaits"},
+    "status":   {"en": "📊 Status", "ru": "📊 Статус", "uk": "📊 Статус", "es": "📊 Estado", "fr": "📊 Statut"},
+    "key":      {"en": "🔑 Key", "ru": "🔑 Ключ", "uk": "🔑 Ключ", "es": "🔑 Clave", "fr": "🔑 Clé"},
+    "devices":  {"en": "📱 Devices", "ru": "📱 Устройства", "uk": "📱 Пристрої", "es": "📱 Dispositivos", "fr": "📱 Appareils"},
+    "human":    {"en": "🆘 Human", "ru": "🆘 Оператор", "uk": "🆘 Оператор", "es": "🆘 Persona", "fr": "🆘 Humain"},
+    "language": {"en": "🌐 Language", "ru": "🌐 Язык", "uk": "🌐 Мова", "es": "🌐 Idioma", "fr": "🌐 Langue"},
+    "help":     {"en": "❓ Help", "ru": "❓ Помощь", "uk": "❓ Допомога", "es": "❓ Ayuda", "fr": "❓ Aide"},
+}
+MENU_ORDER = ["plans", "status", "key", "devices", "human", "language", "help"]
+
+_LABEL_TO_ACTION = {label: action for action, m in _MENU.items() for label in m.values()}
+
+
+def menu_label(action: str, lang: str) -> str:
+    m = _MENU[action]
+    return m.get(normalize(lang), m["en"])
+
+
+def button_action(text: str) -> str | None:
+    return _LABEL_TO_ACTION.get((text or "").strip())
+
+
+# ─── Strings ─────────────────────────────────────────────────────────────────
+STRINGS: dict[str, dict[str, str]] = {
+    "en": {
+        "choose_language": "🌐 Please choose your language:",
+        "language_set": "✅ Language set to {lang}.",
+        "welcome": "👋 Welcome to the arbitrage control plane!\nUse the buttons below to get started.",
+        "help": (
+            "<b>What you can do</b>\n"
+            "📋 Plans — see subscription plans\n"
+            "📊 Status — your subscription & expiry\n"
+            "🔑 Key — show/reissue your API key\n"
+            "📱 Devices — manage your devices\n"
+            "🆘 Human — talk to a real person\n"
+            "🌐 Language — change language\n\n"
+            "💬 You can also just <b>ask a question</b> in plain text — the assistant will help."
+        ),
+        "plans_header": "<b>Plans</b>",
+        "tier_trial": "trial (opportunities up to 2%)",
+        "tier_all": "all opportunities",
+        "price_free": "free",
+        "plan_line": "\n• <b>{name}</b> — {price} / {days}d\n  {tier}; {devices} device(s), {sessions} session(s), {rate}/min",
+        "buy_label": "Buy {name} — {price} {currency}",
+        "buy_unknown": "Unknown plan. Tap 📋 Plans.",
+        "buy_invoice": "🧾 Invoice for <b>{name}</b> ({price} {currency}).\nPay here: {url}\n\nYour subscription activates automatically once payment is confirmed.",
+        "status_none": "No active subscription. Tap 📋 Plans to subscribe.",
+        "status_block": "<b>Subscription</b>\nPlan: {plan}\nStatus: {status}\nExpires: {expires}{key_line}",
+        "status_key_line": "\nAPI key: <code>{prefix}…</code>",
+        "status_no_key": "\nNo API key yet.",
+        "key_none": "You have no active API key. Subscribe via 📋 Plans first.",
+        "key_show": "🔑 API key prefix: <code>{prefix}…</code>\nThe full key is shown only once at issue time.\n\nReissuing <b>disables the current key</b> immediately.",
+        "key_reissue_yes": "⚠️ Yes, reissue",
+        "key_reissue_cancel": "Cancel",
+        "key_reissue_cancelled": "Reissue cancelled. Your current key is unchanged.",
+        "key_reissued": "✅ Key reissued. The old key is now disabled.",
+        "key_new": "🔑 <b>Your new API key (shown once):</b>\n<code>{raw}</code>\n\nStore it securely — it will not be shown again.",
+        "devices_none_key": "No API key yet. Subscribe via 📋 Plans first.",
+        "devices_empty": "No registered devices. They appear after your first session.",
+        "devices_header": "<b>Registered devices</b>",
+        "devices_remove_hint": "\nRemove one to free a device slot:",
+        "device_remove_label": "🗑 Remove {fp}… ({status})",
+        "device_removed": "Device removed. A slot is now free for a new device.",
+        "device_remove_ok": "Removed — slot freed.",
+        "device_remove_fail": "Could not remove.",
+        "human_connecting": "🧑‍💼 Connecting you to a person — someone will reply here shortly. Anything you send now goes straight to our team.",
+        "sent_to_team": "✅ Sent to our team.",
+        "no_account": "No account yet. Send /start.",
+    },
+    "ru": {
+        "choose_language": "🌐 Пожалуйста, выберите язык:",
+        "language_set": "✅ Язык установлен: {lang}.",
+        "welcome": "👋 Добро пожаловать в панель арбитража!\nИспользуйте кнопки ниже, чтобы начать.",
+        "help": (
+            "<b>Что можно сделать</b>\n"
+            "📋 Тарифы — посмотреть планы подписки\n"
+            "📊 Статус — ваша подписка и срок действия\n"
+            "🔑 Ключ — показать/перевыпустить API-ключ\n"
+            "📱 Устройства — управление устройствами\n"
+            "🆘 Оператор — связаться с человеком\n"
+            "🌐 Язык — сменить язык\n\n"
+            "💬 Можно просто <b>задать вопрос</b> текстом — ассистент поможет."
+        ),
+        "plans_header": "<b>Тарифы</b>",
+        "tier_trial": "пробный (возможности до 2%)",
+        "tier_all": "все возможности",
+        "price_free": "бесплатно",
+        "plan_line": "\n• <b>{name}</b> — {price} / {days}д\n  {tier}; устройств: {devices}, сессий: {sessions}, {rate}/мин",
+        "buy_label": "Купить {name} — {price} {currency}",
+        "buy_unknown": "Неизвестный план. Нажмите 📋 Тарифы.",
+        "buy_invoice": "🧾 Счёт за <b>{name}</b> ({price} {currency}).\nОплатить: {url}\n\nПодписка активируется автоматически после оплаты.",
+        "status_none": "Нет активной подписки. Нажмите 📋 Тарифы, чтобы оформить.",
+        "status_block": "<b>Подписка</b>\nПлан: {plan}\nСтатус: {status}\nДействует до: {expires}{key_line}",
+        "status_key_line": "\nAPI-ключ: <code>{prefix}…</code>",
+        "status_no_key": "\nAPI-ключа пока нет.",
+        "key_none": "У вас нет активного API-ключа. Сначала оформите подписку через 📋 Тарифы.",
+        "key_show": "🔑 Префикс ключа: <code>{prefix}…</code>\nПолный ключ показывается только один раз при выпуске.\n\nПеревыпуск <b>немедленно отключает текущий ключ</b>.",
+        "key_reissue_yes": "⚠️ Да, перевыпустить",
+        "key_reissue_cancel": "Отмена",
+        "key_reissue_cancelled": "Перевыпуск отменён. Текущий ключ не изменён.",
+        "key_reissued": "✅ Ключ перевыпущен. Старый ключ отключён.",
+        "key_new": "🔑 <b>Ваш новый API-ключ (показан один раз):</b>\n<code>{raw}</code>\n\nСохраните его надёжно — он больше не будет показан.",
+        "devices_none_key": "API-ключа пока нет. Сначала оформите подписку через 📋 Тарифы.",
+        "devices_empty": "Нет зарегистрированных устройств. Они появятся после первой сессии.",
+        "devices_header": "<b>Зарегистрированные устройства</b>",
+        "devices_remove_hint": "\nУдалите одно, чтобы освободить слот:",
+        "device_remove_label": "🗑 Удалить {fp}… ({status})",
+        "device_removed": "Устройство удалено. Слот освобождён.",
+        "device_remove_ok": "Удалено — слот освобождён.",
+        "device_remove_fail": "Не удалось удалить.",
+        "human_connecting": "🧑‍💼 Соединяю с человеком — скоро ответят здесь. Всё, что вы напишете сейчас, уйдёт нашей команде.",
+        "sent_to_team": "✅ Отправлено нашей команде.",
+        "no_account": "Аккаунта пока нет. Отправьте /start.",
+    },
+    "uk": {
+        "choose_language": "🌐 Будь ласка, оберіть мову:",
+        "language_set": "✅ Мову встановлено: {lang}.",
+        "welcome": "👋 Ласкаво просимо до панелі арбітражу!\nКористуйтеся кнопками нижче, щоб почати.",
+        "help": (
+            "<b>Що можна зробити</b>\n"
+            "📋 Тарифи — переглянути плани підписки\n"
+            "📊 Статус — ваша підписка та термін дії\n"
+            "🔑 Ключ — показати/перевипустити API-ключ\n"
+            "📱 Пристрої — керування пристроями\n"
+            "🆘 Оператор — зв'язатися з людиною\n"
+            "🌐 Мова — змінити мову\n\n"
+            "💬 Можна просто <b>поставити запитання</b> текстом — асистент допоможе."
+        ),
+        "plans_header": "<b>Тарифи</b>",
+        "tier_trial": "пробний (можливості до 2%)",
+        "tier_all": "усі можливості",
+        "price_free": "безкоштовно",
+        "plan_line": "\n• <b>{name}</b> — {price} / {days}д\n  {tier}; пристроїв: {devices}, сесій: {sessions}, {rate}/хв",
+        "buy_label": "Купити {name} — {price} {currency}",
+        "buy_unknown": "Невідомий план. Натисніть 📋 Тарифи.",
+        "buy_invoice": "🧾 Рахунок за <b>{name}</b> ({price} {currency}).\nОплатити: {url}\n\nПідписка активується автоматично після оплати.",
+        "status_none": "Немає активної підписки. Натисніть 📋 Тарифи, щоб оформити.",
+        "status_block": "<b>Підписка</b>\nПлан: {plan}\nСтатус: {status}\nДіє до: {expires}{key_line}",
+        "status_key_line": "\nAPI-ключ: <code>{prefix}…</code>",
+        "status_no_key": "\nAPI-ключа поки немає.",
+        "key_none": "У вас немає активного API-ключа. Спочатку оформіть підписку через 📋 Тарифи.",
+        "key_show": "🔑 Префікс ключа: <code>{prefix}…</code>\nПовний ключ показується лише раз під час випуску.\n\nПеревипуск <b>негайно вимикає поточний ключ</b>.",
+        "key_reissue_yes": "⚠️ Так, перевипустити",
+        "key_reissue_cancel": "Скасувати",
+        "key_reissue_cancelled": "Перевипуск скасовано. Поточний ключ без змін.",
+        "key_reissued": "✅ Ключ перевипущено. Старий ключ вимкнено.",
+        "key_new": "🔑 <b>Ваш новий API-ключ (показано один раз):</b>\n<code>{raw}</code>\n\nЗбережіть його надійно — більше він не показуватиметься.",
+        "devices_none_key": "API-ключа поки немає. Спочатку оформіть підписку через 📋 Тарифи.",
+        "devices_empty": "Немає зареєстрованих пристроїв. Вони з'являться після першої сесії.",
+        "devices_header": "<b>Зареєстровані пристрої</b>",
+        "devices_remove_hint": "\nВидаліть один, щоб звільнити слот:",
+        "device_remove_label": "🗑 Видалити {fp}… ({status})",
+        "device_removed": "Пристрій видалено. Слот звільнено.",
+        "device_remove_ok": "Видалено — слот звільнено.",
+        "device_remove_fail": "Не вдалося видалити.",
+        "human_connecting": "🧑‍💼 З'єдную з людиною — скоро дадуть відповідь тут. Усе, що ви напишете зараз, піде нашій команді.",
+        "sent_to_team": "✅ Надіслано нашій команді.",
+        "no_account": "Облікового запису поки немає. Надішліть /start.",
+    },
+    "es": {
+        "choose_language": "🌐 Por favor, elige tu idioma:",
+        "language_set": "✅ Idioma establecido: {lang}.",
+        "welcome": "👋 ¡Bienvenido al panel de arbitraje!\nUsa los botones de abajo para empezar.",
+        "help": (
+            "<b>Qué puedes hacer</b>\n"
+            "📋 Planes — ver planes de suscripción\n"
+            "📊 Estado — tu suscripción y vencimiento\n"
+            "🔑 Clave — ver/reemitir tu clave API\n"
+            "📱 Dispositivos — gestionar tus dispositivos\n"
+            "🆘 Persona — hablar con alguien real\n"
+            "🌐 Idioma — cambiar idioma\n\n"
+            "💬 También puedes simplemente <b>hacer una pregunta</b> — el asistente te ayudará."
+        ),
+        "plans_header": "<b>Planes</b>",
+        "tier_trial": "prueba (oportunidades hasta 2%)",
+        "tier_all": "todas las oportunidades",
+        "price_free": "gratis",
+        "plan_line": "\n• <b>{name}</b> — {price} / {days}d\n  {tier}; {devices} dispositivo(s), {sessions} sesión(es), {rate}/min",
+        "buy_label": "Comprar {name} — {price} {currency}",
+        "buy_unknown": "Plan desconocido. Pulsa 📋 Planes.",
+        "buy_invoice": "🧾 Factura por <b>{name}</b> ({price} {currency}).\nPaga aquí: {url}\n\nTu suscripción se activa automáticamente tras el pago.",
+        "status_none": "Sin suscripción activa. Pulsa 📋 Planes para suscribirte.",
+        "status_block": "<b>Suscripción</b>\nPlan: {plan}\nEstado: {status}\nVence: {expires}{key_line}",
+        "status_key_line": "\nClave API: <code>{prefix}…</code>",
+        "status_no_key": "\nAún no hay clave API.",
+        "key_none": "No tienes una clave API activa. Suscríbete primero con 📋 Planes.",
+        "key_show": "🔑 Prefijo de la clave: <code>{prefix}…</code>\nLa clave completa solo se muestra una vez al emitirla.\n\nReemitir <b>desactiva la clave actual</b> de inmediato.",
+        "key_reissue_yes": "⚠️ Sí, reemitir",
+        "key_reissue_cancel": "Cancelar",
+        "key_reissue_cancelled": "Reemisión cancelada. Tu clave actual no cambia.",
+        "key_reissued": "✅ Clave reemitida. La anterior queda desactivada.",
+        "key_new": "🔑 <b>Tu nueva clave API (se muestra una vez):</b>\n<code>{raw}</code>\n\nGuárdala de forma segura — no se mostrará de nuevo.",
+        "devices_none_key": "Aún no hay clave API. Suscríbete primero con 📋 Planes.",
+        "devices_empty": "No hay dispositivos registrados. Aparecen tras tu primera sesión.",
+        "devices_header": "<b>Dispositivos registrados</b>",
+        "devices_remove_hint": "\nElimina uno para liberar un espacio:",
+        "device_remove_label": "🗑 Eliminar {fp}… ({status})",
+        "device_removed": "Dispositivo eliminado. Hay un espacio libre.",
+        "device_remove_ok": "Eliminado — espacio liberado.",
+        "device_remove_fail": "No se pudo eliminar.",
+        "human_connecting": "🧑‍💼 Te conecto con una persona — alguien responderá aquí pronto. Lo que escribas ahora va directo a nuestro equipo.",
+        "sent_to_team": "✅ Enviado a nuestro equipo.",
+        "no_account": "Aún no hay cuenta. Envía /start.",
+    },
+    "fr": {
+        "choose_language": "🌐 Veuillez choisir votre langue :",
+        "language_set": "✅ Langue définie : {lang}.",
+        "welcome": "👋 Bienvenue dans le panneau d'arbitrage !\nUtilisez les boutons ci-dessous pour commencer.",
+        "help": (
+            "<b>Ce que vous pouvez faire</b>\n"
+            "📋 Forfaits — voir les abonnements\n"
+            "📊 Statut — votre abonnement et son échéance\n"
+            "🔑 Clé — afficher/réémettre votre clé API\n"
+            "📱 Appareils — gérer vos appareils\n"
+            "🆘 Humain — parler à une vraie personne\n"
+            "🌐 Langue — changer de langue\n\n"
+            "💬 Vous pouvez aussi simplement <b>poser une question</b> — l'assistant vous aidera."
+        ),
+        "plans_header": "<b>Forfaits</b>",
+        "tier_trial": "essai (opportunités jusqu'à 2%)",
+        "tier_all": "toutes les opportunités",
+        "price_free": "gratuit",
+        "plan_line": "\n• <b>{name}</b> — {price} / {days}j\n  {tier}; {devices} appareil(s), {sessions} session(s), {rate}/min",
+        "buy_label": "Acheter {name} — {price} {currency}",
+        "buy_unknown": "Forfait inconnu. Appuyez sur 📋 Forfaits.",
+        "buy_invoice": "🧾 Facture pour <b>{name}</b> ({price} {currency}).\nPayez ici : {url}\n\nVotre abonnement s'active automatiquement après le paiement.",
+        "status_none": "Aucun abonnement actif. Appuyez sur 📋 Forfaits pour vous abonner.",
+        "status_block": "<b>Abonnement</b>\nForfait : {plan}\nStatut : {status}\nExpire : {expires}{key_line}",
+        "status_key_line": "\nClé API : <code>{prefix}…</code>",
+        "status_no_key": "\nPas encore de clé API.",
+        "key_none": "Vous n'avez pas de clé API active. Abonnez-vous d'abord via 📋 Forfaits.",
+        "key_show": "🔑 Préfixe de la clé : <code>{prefix}…</code>\nLa clé complète n'est affichée qu'une seule fois à l'émission.\n\nLa réémission <b>désactive immédiatement la clé actuelle</b>.",
+        "key_reissue_yes": "⚠️ Oui, réémettre",
+        "key_reissue_cancel": "Annuler",
+        "key_reissue_cancelled": "Réémission annulée. Votre clé actuelle est inchangée.",
+        "key_reissued": "✅ Clé réémise. L'ancienne est désactivée.",
+        "key_new": "🔑 <b>Votre nouvelle clé API (affichée une fois) :</b>\n<code>{raw}</code>\n\nConservez-la en lieu sûr — elle ne sera plus affichée.",
+        "devices_none_key": "Pas encore de clé API. Abonnez-vous d'abord via 📋 Forfaits.",
+        "devices_empty": "Aucun appareil enregistré. Ils apparaissent après votre première session.",
+        "devices_header": "<b>Appareils enregistrés</b>",
+        "devices_remove_hint": "\nSupprimez-en un pour libérer un emplacement :",
+        "device_remove_label": "🗑 Supprimer {fp}… ({status})",
+        "device_removed": "Appareil supprimé. Un emplacement est libre.",
+        "device_remove_ok": "Supprimé — emplacement libéré.",
+        "device_remove_fail": "Suppression impossible.",
+        "human_connecting": "🧑‍💼 Je vous mets en relation avec une personne — réponse ici sous peu. Tout ce que vous écrivez maintenant va directement à notre équipe.",
+        "sent_to_team": "✅ Envoyé à notre équipe.",
+        "no_account": "Pas encore de compte. Envoyez /start.",
+    },
+}
+
+
+def t(lang_code: str | None, key: str, **kwargs) -> str:
+    table = STRINGS.get(normalize(lang_code), STRINGS[DEFAULT_LANG])
+    s = table.get(key) or STRINGS[DEFAULT_LANG].get(key, key)
+    return s.format(**kwargs) if kwargs else s

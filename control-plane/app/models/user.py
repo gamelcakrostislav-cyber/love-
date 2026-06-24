@@ -21,6 +21,9 @@ class User(Base):
     # Bloggers earn a higher referral rate (admin-flagged).
     is_blogger: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+    # Preferred conversation language (ISO-ish code: en/ru/uk/es/fr).
+    language: Mapped[str] = mapped_column(String(8), default="en", server_default="en", nullable=False)
+
     # Self-referential: who invited this user (nullable).
     referred_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

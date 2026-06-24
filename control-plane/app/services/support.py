@@ -32,6 +32,12 @@ ESCALATE = "<ESCALATE>"
 _RATE_PER_MIN = 15
 _HISTORY_TTL = 3600  # keep a conversation for an hour of inactivity
 
+# Display names for the user-chosen reply language (keeps support layer free of
+# the bot/i18n layer). Falls back to "the user's language".
+LANGUAGE_NAMES = {
+    "en": "English", "ru": "Russian", "uk": "Ukrainian", "es": "Spanish", "fr": "French",
+}
+
 SUPPORT_SYSTEM_PROMPT = """You are the friendly support assistant for an \
 arbitrage tool sold through this Telegram bot. Help customers use the product \
 and resolve billing/access issues.
@@ -177,8 +183,13 @@ async def answer(db: AsyncSession, user: User, text: str) -> SupportResult:
 
     history = await _load_history(user.telegram_id)
     context = await _user_context(db, user)
+    lang_name = LANGUAGE_NAMES.get(getattr(user, "language", "en") or "en")
+    directive = (
+        f"\n\nAlways respond in {lang_name}." if lang_name
+        else "\n\nReply in the same language the user writes in."
+    )
     messages = [
-        {"role": "system", "content": SUPPORT_SYSTEM_PROMPT},
+        {"role": "system", "content": SUPPORT_SYSTEM_PROMPT + directive},
         *history,
         {"role": "user", "content": f"{context}\n\n{text}"},
     ]
