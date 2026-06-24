@@ -7,6 +7,8 @@ triggers server-side actions.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import CallbackQuery, Message
@@ -100,9 +102,11 @@ async def show_status(message: Message, lang: str) -> None:
         i18n.t(lang, "status_key_line", prefix=key.prefix) if key
         else i18n.t(lang, "status_no_key")
     )
+    days = max(0, (sub.expires_at - datetime.now(UTC)).days)
     await message.answer(
         i18n.t(lang, "status_block", plan=plan.name, status=sub.status,
-               expires=f"{sub.expires_at:%Y-%m-%d %H:%M UTC}", key_line=key_line),
+               expires=f"{sub.expires_at:%Y-%m-%d %H:%M UTC}",
+               days_left=i18n.t(lang, "days_left", n=days), key_line=key_line),
         parse_mode="HTML",
     )
 
@@ -146,6 +150,10 @@ async def open_language(message: Message) -> None:
     await message.answer(i18n.t(lang, "choose_language"), reply_markup=language_keyboard())
 
 
+async def _has_active_sub(db, user_id: int) -> bool:
+    return await subscriptions.get_active_with_plan(db, user_id) is not None
+
+
 async def _human_flow(message: Message) -> None:
     async with SessionFactory() as db:
         user, _ = await users.get_or_create(
@@ -162,8 +170,8 @@ async def _do_start(message: Message, ref_payload: str | None) -> None:
         user, created = await users.get_or_create(
             db, telegram_id=message.from_user.id, username=message.from_user.username
         )
-        ref_note = ""
         if created:
+            ref_note = ""
             user.language = _seed_lang(message)
             if ref_payload and ref_payload.isdigit():
                 referral = await referrals.attach(
@@ -171,11 +179,22 @@ async def _do_start(message: Message, ref_payload: str | None) -> None:
                 )
                 if referral is not None:
                     ref_note = "\n🎁"
+            lang = i18n.normalize(user.language)
+            await db.commit()
+            # First impression for a brand-new user: just pick a language.
+            # The welcome + menu + quick-start follow once they choose (set_language).
+            await message.answer(i18n.t(lang, "choose_language") + ref_note,
+                                 reply_markup=language_keyboard())
+            return
+
         lang = i18n.normalize(user.language)
-        await db.commit()
-    await message.answer(i18n.t(lang, "welcome") + ref_note,
+        has_sub = await _has_active_sub(db, user.id)
+
+    # Returning user: warm welcome-back + the persistent menu.
+    await message.answer(i18n.t(lang, "welcome_back"),
                          parse_mode="HTML", reply_markup=main_menu_keyboard(lang))
-    await message.answer(i18n.t(lang, "choose_language"), reply_markup=language_keyboard())
+    if not has_sub:
+        await message.answer(i18n.t(lang, "getting_started"), parse_mode="HTML")
 
 
 @router.message(CommandStart(deep_link=True))
@@ -196,10 +215,14 @@ async def set_language(cb: CallbackQuery) -> None:
             db, telegram_id=cb.from_user.id, username=cb.from_user.username
         )
         user.language = code
+        has_sub = await _has_active_sub(db, user.id)
         await db.commit()
     await cb.message.answer(i18n.t(code, "language_set", lang=i18n.LANGUAGES[code]))
     await cb.message.answer(i18n.t(code, "welcome"), parse_mode="HTML",
                             reply_markup=main_menu_keyboard(code))
+    # New / unsubscribed users get the quick-start guide right after choosing.
+    if not has_sub:
+        await cb.message.answer(i18n.t(code, "getting_started"), parse_mode="HTML")
     await cb.answer()
 
 

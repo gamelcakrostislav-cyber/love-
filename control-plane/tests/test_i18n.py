@@ -44,3 +44,20 @@ def test_command_descriptions_cover_every_language():
 
 def test_command_description_falls_back_to_english():
     assert i18n.command_description("plans", "zz") == i18n.COMMANDS["plans"]["en"]
+
+
+def test_status_block_formats_in_every_language():
+    # Guards against a missing {placeholder} in any localized status string.
+    for lang in i18n.LANGUAGES:
+        out = i18n.t(
+            lang, "status_block", plan="monthly", status="active",
+            expires="2026-07-01", days_left=i18n.t(lang, "days_left", n=5), key_line="",
+        )
+        assert "{" not in out and "}" not in out
+
+
+def test_onboarding_strings_present_in_every_language():
+    for lang in i18n.LANGUAGES:
+        assert i18n.t(lang, "welcome")
+        assert i18n.t(lang, "welcome_back")
+        assert i18n.t(lang, "getting_started")

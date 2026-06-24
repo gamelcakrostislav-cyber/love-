@@ -72,7 +72,17 @@ STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "choose_language": "🌐 Please choose your language:",
         "language_set": "✅ Language set to {lang}.",
-        "welcome": "👋 Welcome to the arbitrage control plane!\nUse the buttons below to get started.",
+        "welcome": "👋 <b>Welcome!</b> This bot manages your arbitrage subscription, API key and devices.\n\nTap a button below to begin — or just type a question and the assistant will help.",
+        "welcome_back": "👋 <b>Welcome back!</b> Tap a button below, or ask me anything.",
+        "getting_started": (
+            "<b>🚀 Quick start</b>\n"
+            "1️⃣ Tap 📋 <b>Plans</b> and choose one — start free with the trial.\n"
+            "2️⃣ Tap 🔑 <b>Key</b> to get your API key (shown once).\n"
+            "3️⃣ Paste the key into the product to go live.\n\n"
+            "Stuck on any step? Just type your question here. 💬"
+        ),
+        "days_left": "{n} days left",
+        "expires_soon": "⏳ expires in {n} days",
         "help": (
             "<b>What you can do</b>\n"
             "📋 Plans — see subscription plans\n"
@@ -83,7 +93,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Language — change language\n\n"
             "💬 You can also just <b>ask a question</b> in plain text — the assistant will help."
         ),
-        "plans_header": "<b>Plans</b>",
+        "plans_header": "<b>📋 Choose a plan</b>\nTap a button below to subscribe. Payment is in crypto and activates automatically.",
         "tier_trial": "trial (opportunities up to 2%)",
         "tier_all": "all opportunities",
         "price_free": "free",
@@ -91,8 +101,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "buy_label": "Buy {name} — {price} {currency}",
         "buy_unknown": "Unknown plan. Tap 📋 Plans.",
         "buy_invoice": "🧾 Invoice for <b>{name}</b> ({price} {currency}).\nPay here: {url}\n\nYour subscription activates automatically once payment is confirmed.",
-        "status_none": "No active subscription. Tap 📋 Plans to subscribe.",
-        "status_block": "<b>Subscription</b>\nPlan: {plan}\nStatus: {status}\nExpires: {expires}{key_line}",
+        "status_none": "You don't have an active subscription yet.\nTap 📋 <b>Plans</b> to get started — the trial is free.",
+        "status_block": "<b>📊 Your subscription</b>\nPlan: <b>{plan}</b>\nStatus: {status}\nExpires: {expires} · {days_left}{key_line}",
         "status_key_line": "\nAPI key: <code>{prefix}…</code>",
         "status_no_key": "\nNo API key yet.",
         "key_none": "You have no active API key. Subscribe via 📋 Plans first.",
@@ -117,7 +127,17 @@ STRINGS: dict[str, dict[str, str]] = {
     "ru": {
         "choose_language": "🌐 Пожалуйста, выберите язык:",
         "language_set": "✅ Язык установлен: {lang}.",
-        "welcome": "👋 Добро пожаловать в панель арбитража!\nИспользуйте кнопки ниже, чтобы начать.",
+        "welcome": "👋 <b>Добро пожаловать!</b> Этот бот управляет вашей подпиской, API-ключом и устройствами.\n\nНажмите кнопку ниже, чтобы начать — или просто напишите вопрос, и ассистент поможет.",
+        "welcome_back": "👋 <b>С возвращением!</b> Нажмите кнопку ниже или задайте любой вопрос.",
+        "getting_started": (
+            "<b>🚀 Быстрый старт</b>\n"
+            "1️⃣ Нажмите 📋 <b>Тарифы</b> и выберите план — начните бесплатно с пробного.\n"
+            "2️⃣ Нажмите 🔑 <b>Ключ</b>, чтобы получить API-ключ (показывается один раз).\n"
+            "3️⃣ Вставьте ключ в продукт — и всё готово.\n\n"
+            "Застряли на каком-то шаге? Просто напишите вопрос здесь. 💬"
+        ),
+        "days_left": "осталось дней: {n}",
+        "expires_soon": "⏳ истекает через {n} дн.",
         "help": (
             "<b>Что можно сделать</b>\n"
             "📋 Тарифы — посмотреть планы подписки\n"
@@ -128,7 +148,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Язык — сменить язык\n\n"
             "💬 Можно просто <b>задать вопрос</b> текстом — ассистент поможет."
         ),
-        "plans_header": "<b>Тарифы</b>",
+        "plans_header": "<b>📋 Выберите тариф</b>\nНажмите кнопку ниже, чтобы оформить. Оплата в крипте, активация автоматическая.",
         "tier_trial": "пробный (возможности до 2%)",
         "tier_all": "все возможности",
         "price_free": "бесплатно",
@@ -136,8 +156,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "buy_label": "Купить {name} — {price} {currency}",
         "buy_unknown": "Неизвестный план. Нажмите 📋 Тарифы.",
         "buy_invoice": "🧾 Счёт за <b>{name}</b> ({price} {currency}).\nОплатить: {url}\n\nПодписка активируется автоматически после оплаты.",
-        "status_none": "Нет активной подписки. Нажмите 📋 Тарифы, чтобы оформить.",
-        "status_block": "<b>Подписка</b>\nПлан: {plan}\nСтатус: {status}\nДействует до: {expires}{key_line}",
+        "status_none": "У вас пока нет активной подписки.\nНажмите 📋 <b>Тарифы</b>, чтобы начать — пробный бесплатный.",
+        "status_block": "<b>📊 Ваша подписка</b>\nПлан: <b>{plan}</b>\nСтатус: {status}\nДействует до: {expires} · {days_left}{key_line}",
         "status_key_line": "\nAPI-ключ: <code>{prefix}…</code>",
         "status_no_key": "\nAPI-ключа пока нет.",
         "key_none": "У вас нет активного API-ключа. Сначала оформите подписку через 📋 Тарифы.",
@@ -162,7 +182,17 @@ STRINGS: dict[str, dict[str, str]] = {
     "uk": {
         "choose_language": "🌐 Будь ласка, оберіть мову:",
         "language_set": "✅ Мову встановлено: {lang}.",
-        "welcome": "👋 Ласкаво просимо до панелі арбітражу!\nКористуйтеся кнопками нижче, щоб почати.",
+        "welcome": "👋 <b>Ласкаво просимо!</b> Цей бот керує вашою підпискою, API-ключем і пристроями.\n\nНатисніть кнопку нижче, щоб почати — або просто напишіть запитання, і асистент допоможе.",
+        "welcome_back": "👋 <b>З поверненням!</b> Натисніть кнопку нижче або поставте будь-яке запитання.",
+        "getting_started": (
+            "<b>🚀 Швидкий старт</b>\n"
+            "1️⃣ Натисніть 📋 <b>Тарифи</b> й оберіть план — почніть безкоштовно з пробного.\n"
+            "2️⃣ Натисніть 🔑 <b>Ключ</b>, щоб отримати API-ключ (показується один раз).\n"
+            "3️⃣ Вставте ключ у продукт — і все готово.\n\n"
+            "Застрягли на якомусь кроці? Просто напишіть запитання тут. 💬"
+        ),
+        "days_left": "залишилось днів: {n}",
+        "expires_soon": "⏳ спливає через {n} дн.",
         "help": (
             "<b>Що можна зробити</b>\n"
             "📋 Тарифи — переглянути плани підписки\n"
@@ -173,7 +203,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Мова — змінити мову\n\n"
             "💬 Можна просто <b>поставити запитання</b> текстом — асистент допоможе."
         ),
-        "plans_header": "<b>Тарифи</b>",
+        "plans_header": "<b>📋 Оберіть тариф</b>\nНатисніть кнопку нижче, щоб оформити. Оплата у крипті, активація автоматична.",
         "tier_trial": "пробний (можливості до 2%)",
         "tier_all": "усі можливості",
         "price_free": "безкоштовно",
@@ -181,8 +211,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "buy_label": "Купити {name} — {price} {currency}",
         "buy_unknown": "Невідомий план. Натисніть 📋 Тарифи.",
         "buy_invoice": "🧾 Рахунок за <b>{name}</b> ({price} {currency}).\nОплатити: {url}\n\nПідписка активується автоматично після оплати.",
-        "status_none": "Немає активної підписки. Натисніть 📋 Тарифи, щоб оформити.",
-        "status_block": "<b>Підписка</b>\nПлан: {plan}\nСтатус: {status}\nДіє до: {expires}{key_line}",
+        "status_none": "У вас поки немає активної підписки.\nНатисніть 📋 <b>Тарифи</b>, щоб почати — пробний безкоштовний.",
+        "status_block": "<b>📊 Ваша підписка</b>\nПлан: <b>{plan}</b>\nСтатус: {status}\nДіє до: {expires} · {days_left}{key_line}",
         "status_key_line": "\nAPI-ключ: <code>{prefix}…</code>",
         "status_no_key": "\nAPI-ключа поки немає.",
         "key_none": "У вас немає активного API-ключа. Спочатку оформіть підписку через 📋 Тарифи.",
@@ -207,7 +237,17 @@ STRINGS: dict[str, dict[str, str]] = {
     "es": {
         "choose_language": "🌐 Por favor, elige tu idioma:",
         "language_set": "✅ Idioma establecido: {lang}.",
-        "welcome": "👋 ¡Bienvenido al panel de arbitraje!\nUsa los botones de abajo para empezar.",
+        "welcome": "👋 <b>¡Bienvenido!</b> Este bot gestiona tu suscripción, clave API y dispositivos.\n\nPulsa un botón abajo para empezar — o simplemente escribe una pregunta y el asistente te ayudará.",
+        "welcome_back": "👋 <b>¡Bienvenido de nuevo!</b> Pulsa un botón abajo o pregúntame lo que quieras.",
+        "getting_started": (
+            "<b>🚀 Inicio rápido</b>\n"
+            "1️⃣ Pulsa 📋 <b>Planes</b> y elige uno — empieza gratis con la prueba.\n"
+            "2️⃣ Pulsa 🔑 <b>Clave</b> para obtener tu clave API (se muestra una vez).\n"
+            "3️⃣ Pega la clave en el producto y listo.\n\n"
+            "¿Atascado en algún paso? Solo escribe tu pregunta aquí. 💬"
+        ),
+        "days_left": "quedan {n} días",
+        "expires_soon": "⏳ vence en {n} días",
         "help": (
             "<b>Qué puedes hacer</b>\n"
             "📋 Planes — ver planes de suscripción\n"
@@ -218,7 +258,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Idioma — cambiar idioma\n\n"
             "💬 También puedes simplemente <b>hacer una pregunta</b> — el asistente te ayudará."
         ),
-        "plans_header": "<b>Planes</b>",
+        "plans_header": "<b>📋 Elige un plan</b>\nPulsa un botón abajo para suscribirte. El pago es en cripto y se activa automáticamente.",
         "tier_trial": "prueba (oportunidades hasta 2%)",
         "tier_all": "todas las oportunidades",
         "price_free": "gratis",
@@ -226,8 +266,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "buy_label": "Comprar {name} — {price} {currency}",
         "buy_unknown": "Plan desconocido. Pulsa 📋 Planes.",
         "buy_invoice": "🧾 Factura por <b>{name}</b> ({price} {currency}).\nPaga aquí: {url}\n\nTu suscripción se activa automáticamente tras el pago.",
-        "status_none": "Sin suscripción activa. Pulsa 📋 Planes para suscribirte.",
-        "status_block": "<b>Suscripción</b>\nPlan: {plan}\nEstado: {status}\nVence: {expires}{key_line}",
+        "status_none": "Aún no tienes una suscripción activa.\nPulsa 📋 <b>Planes</b> para empezar — la prueba es gratis.",
+        "status_block": "<b>📊 Tu suscripción</b>\nPlan: <b>{plan}</b>\nEstado: {status}\nVence: {expires} · {days_left}{key_line}",
         "status_key_line": "\nClave API: <code>{prefix}…</code>",
         "status_no_key": "\nAún no hay clave API.",
         "key_none": "No tienes una clave API activa. Suscríbete primero con 📋 Planes.",
@@ -252,7 +292,17 @@ STRINGS: dict[str, dict[str, str]] = {
     "fr": {
         "choose_language": "🌐 Veuillez choisir votre langue :",
         "language_set": "✅ Langue définie : {lang}.",
-        "welcome": "👋 Bienvenue dans le panneau d'arbitrage !\nUtilisez les boutons ci-dessous pour commencer.",
+        "welcome": "👋 <b>Bienvenue !</b> Ce bot gère votre abonnement, votre clé API et vos appareils.\n\nAppuyez sur un bouton ci-dessous pour commencer — ou posez simplement une question, l'assistant vous aidera.",
+        "welcome_back": "👋 <b>Bon retour !</b> Appuyez sur un bouton ci-dessous ou posez-moi une question.",
+        "getting_started": (
+            "<b>🚀 Démarrage rapide</b>\n"
+            "1️⃣ Appuyez sur 📋 <b>Forfaits</b> et choisissez-en un — commencez gratuitement avec l'essai.\n"
+            "2️⃣ Appuyez sur 🔑 <b>Clé</b> pour obtenir votre clé API (affichée une fois).\n"
+            "3️⃣ Collez la clé dans le produit, et c'est parti.\n\n"
+            "Bloqué à une étape ? Écrivez simplement votre question ici. 💬"
+        ),
+        "days_left": "{n} jours restants",
+        "expires_soon": "⏳ expire dans {n} jours",
         "help": (
             "<b>Ce que vous pouvez faire</b>\n"
             "📋 Forfaits — voir les abonnements\n"
@@ -263,7 +313,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "🌐 Langue — changer de langue\n\n"
             "💬 Vous pouvez aussi simplement <b>poser une question</b> — l'assistant vous aidera."
         ),
-        "plans_header": "<b>Forfaits</b>",
+        "plans_header": "<b>📋 Choisissez un forfait</b>\nAppuyez sur un bouton ci-dessous pour vous abonner. Le paiement se fait en crypto et s'active automatiquement.",
         "tier_trial": "essai (opportunités jusqu'à 2%)",
         "tier_all": "toutes les opportunités",
         "price_free": "gratuit",
@@ -271,8 +321,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "buy_label": "Acheter {name} — {price} {currency}",
         "buy_unknown": "Forfait inconnu. Appuyez sur 📋 Forfaits.",
         "buy_invoice": "🧾 Facture pour <b>{name}</b> ({price} {currency}).\nPayez ici : {url}\n\nVotre abonnement s'active automatiquement après le paiement.",
-        "status_none": "Aucun abonnement actif. Appuyez sur 📋 Forfaits pour vous abonner.",
-        "status_block": "<b>Abonnement</b>\nForfait : {plan}\nStatut : {status}\nExpire : {expires}{key_line}",
+        "status_none": "Vous n'avez pas encore d'abonnement actif.\nAppuyez sur 📋 <b>Forfaits</b> pour commencer — l'essai est gratuit.",
+        "status_block": "<b>📊 Votre abonnement</b>\nForfait : <b>{plan}</b>\nStatut : {status}\nExpire : {expires} · {days_left}{key_line}",
         "status_key_line": "\nClé API : <code>{prefix}…</code>",
         "status_no_key": "\nPas encore de clé API.",
         "key_none": "Vous n'avez pas de clé API active. Abonnez-vous d'abord via 📋 Forfaits.",
