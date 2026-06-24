@@ -65,20 +65,55 @@ def _rows():
     return u, p, s, r, c, e
 
 
-def test_props_keys_match_their_schema_exactly():
-    """Guards against schema/props drift — a page prop with no schema column is dropped by Notion."""
+def test_props_keys_are_subset_of_their_schema():
+    """Notion rejects a page property with no matching schema column; extra schema
+    columns (e.g. the two-way Action field) are fine, so the invariant is subset."""
     ids = {"customers": "C", "payments": "P"}
-    schema_keys = {k: set(ns.db_schema(k, ids)) for k in ns._DB_ORDER}
+    sk = {k: set(ns.db_schema(k, ids)) for k in ns._DB_ORDER}
     u, p, s, r, c, e = _rows()
 
     cust = ns.customer_props(u, plan="monthly", status="active", expires_at=DT,
                              key_prefix="ab12", devices=2, referrals=5, earnings=Decimal("12.5"))
-    assert set(cust) == schema_keys["customers"]
-    assert ns.payment_props(p, customer_page="cp").keys() == schema_keys["payments"]
-    assert set(ns.subscription_props(s, customer_page="cp", plan_name="yearly")) == schema_keys["subscriptions"]
-    assert set(ns.referral_props(r, referrer_page="a", referred_page="b")) == schema_keys["referrals"]
-    assert set(ns.commission_props(c, referrer_page="a", payment_page="p")) == schema_keys["commissions"]
-    assert set(ns.abuse_props(e, customer_page=None)) == schema_keys["flags"]
+    assert set(cust) <= sk["customers"]
+    assert set(ns.payment_props(p, customer_page="cp")) <= sk["payments"]
+    assert set(ns.subscription_props(s, customer_page="cp", plan_name="yearly")) <= sk["subscriptions"]
+    assert set(ns.referral_props(r, referrer_page="a", referred_page="b")) <= sk["referrals"]
+    assert set(ns.commission_props(c, referrer_page="a", payment_page="p")) <= sk["commissions"]
+    assert set(ns.abuse_props(e, customer_page=None)) <= sk["flags"]
+
+
+def test_overview_and_audit_props_subset_their_schema():
+    ov_schema = set(ns.db_schema("overview", {}))
+    ov = ns.overview_props("2026-06-24", customers=10, active=4, paid=3, trial=1, new24h=2,
+                           revenue=Decimal("147"), payments=3, pending=1,
+                           commissions=Decimal("9.8"), flagged=0, abuse=2)
+    assert set(ov) <= ov_schema
+    au_schema = set(ns.db_schema("audit", {}))
+    a = SimpleNamespace(id=9, actor="admin:1", action="subscription_granted", target="1", created_at=DT)
+    assert set(ns.audit_props(a)) <= au_schema
+
+
+def test_icons_and_readers():
+    assert n.emoji_icon("💎") == {"type": "emoji", "emoji": "💎"}
+    assert n.emoji_icon(None) is None
+    assert ns._customer_icon("active", "trial") == "🧪"
+    assert ns._customer_icon("active", "monthly") == "💎"
+    assert ns._customer_icon("inactive", "none") == "⚪"
+    assert n.read_select({"select": {"name": "grant_monthly"}}) == "grant_monthly"
+    assert n.read_select({"select": None}) is None
+    assert n.read_title({"title": [{"plain_text": "a"}, {"plain_text": "b"}]}) == "ab"
+
+
+def test_two_way_action_map_is_consistent():
+    # Every dropdown option maps to a handler, and vice-versa.
+    assert set(ns._ACTIONS) == set(ns._ACTION_OPTIONS)
+    assert ns._ACTIONS["grant_yearly"] == ("grant", "yearly")
+    assert ns._ACTIONS["revoke"][0] == "revoke"
+    # The Action field is a predefined-options select on the Customers schema.
+    cust_schema = ns.db_schema("customers", {"customers": "C", "payments": "P"})
+    assert cust_schema["Action"] == {"select": {"options": [{"name": a} for a in ns._ACTION_OPTIONS]}}
+    # Clearing the field uses select(None).
+    assert n.select(None) == {"select": None}
 
 
 def test_relation_values():

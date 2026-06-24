@@ -31,6 +31,11 @@ async def tick() -> None:
 
 async def notion_tick() -> None:
     try:
+        # Apply any owner-set actions first, then mirror the (updated) state.
+        async with SessionFactory() as db:
+            applied = await notion_sync.apply_actions(db)
+        if applied:
+            log.info("notion actions: %d applied", applied)
         async with SessionFactory() as db:
             written = await notion_sync.reconcile(db)
         if written:  # None (lock held) and 0 (nothing to do) are both quiet

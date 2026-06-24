@@ -59,28 +59,61 @@ async def _request(method: str, path: str, payload: dict | None = None) -> dict:
     return resp.json()
 
 
-async def create_database(parent_page_id: str, title: str, properties: dict) -> str:
+async def create_database(parent_page_id: str, title: str, properties: dict,
+                          icon: dict | None = None) -> str:
     """Create a database under a parent page; return its id."""
-    data = await _request("POST", "/databases", {
+    payload: dict = {
         "parent": {"type": "page_id", "page_id": parent_page_id},
         "title": [{"type": "text", "text": {"content": title}}],
         "properties": properties,
-    })
+    }
+    if icon is not None:
+        payload["icon"] = icon
+    data = await _request("POST", "/databases", payload)
     return data["id"]
 
 
-async def create_page(database_id: str, properties: dict) -> str:
+async def update_database(database_id: str, properties: dict | None = None,
+                          icon: dict | None = None) -> None:
+    """Patch a database — add properties and/or set its icon (idempotent)."""
+    payload: dict = {}
+    if properties is not None:
+        payload["properties"] = properties
+    if icon is not None:
+        payload["icon"] = icon
+    if payload:
+        await _request("PATCH", f"/databases/{database_id}", payload)
+
+
+async def query_database(database_id: str, filter: dict | None = None,
+                         page_size: int = 100) -> list[dict]:
+    """Return up to `page_size` pages from a database (optionally filtered)."""
+    body: dict = {"page_size": page_size}
+    if filter is not None:
+        body["filter"] = filter
+    data = await _request("POST", f"/databases/{database_id}/query", body)
+    return data.get("results", [])
+
+
+async def create_page(database_id: str, properties: dict, icon: dict | None = None) -> str:
     """Create a page (row) in a database; return its id."""
-    data = await _request("POST", "/pages", {
-        "parent": {"database_id": database_id},
-        "properties": properties,
-    })
+    payload: dict = {"parent": {"database_id": database_id}, "properties": properties}
+    if icon is not None:
+        payload["icon"] = icon
+    data = await _request("POST", "/pages", payload)
     return data["id"]
 
 
-async def update_page(page_id: str, properties: dict) -> None:
-    """Patch an existing page's properties."""
-    await _request("PATCH", f"/pages/{page_id}", {"properties": properties})
+async def update_page(page_id: str, properties: dict | None = None,
+                      icon: dict | None = None) -> None:
+    """Patch an existing page's properties and/or icon."""
+    payload: dict = {}
+    if properties is not None:
+        payload["properties"] = properties
+    if icon is not None:
+        payload["icon"] = icon
+    if payload:
+        await _request("PATCH", f"/pages/{page_id}", payload)
 
 
 # ─── Pure property-VALUE builders (for page create/update) ───────────────────
@@ -123,6 +156,24 @@ def relation(*page_ids: str | None) -> dict:
     return {"relation": [{"id": pid} for pid in page_ids if pid]}
 
 
+def emoji_icon(emoji: str | None) -> dict | None:
+    return {"type": "emoji", "emoji": emoji} if emoji else None
+
+
+# ─── Pure property-VALUE readers (parse a page's properties from a query) ─────
+def read_select(prop: dict | None) -> str | None:
+    sel = (prop or {}).get("select")
+    return sel.get("name") if sel else None
+
+
+def read_number(prop: dict | None) -> float | None:
+    return (prop or {}).get("number")
+
+
+def read_title(prop: dict | None) -> str:
+    return "".join(part.get("plain_text", "") for part in (prop or {}).get("title", []))
+
+
 # ─── Pure property-SCHEMA builders (for database creation) ───────────────────
 def s_title() -> dict:
     return {"title": {}}
@@ -138,6 +189,11 @@ def s_number(fmt: str = "number") -> dict:
 
 def s_select() -> dict:
     return {"select": {}}
+
+
+def s_select_options(names: list[str]) -> dict:
+    """A select with predefined options (so the Notion dropdown is pre-populated)."""
+    return {"select": {"options": [{"name": x} for x in names]}}
 
 
 def s_date() -> dict:

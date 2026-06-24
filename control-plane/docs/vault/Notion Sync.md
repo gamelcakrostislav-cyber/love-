@@ -13,16 +13,21 @@ owner. Off by default; never affects entitlement (which stays server-side,
 
 ## Databases (auto-provisioned)
 Created under a parent page on first run, in dependency order so relations
-resolve:
+resolve. Each gets an emoji icon; a stored schema version (`_SCHEMA_VERSION` on
+the db mapping row) lets later builds PATCH new props/icons onto existing DBs.
 
 | Database | Source ([[Data Model]]) | Relations |
 |----------|-------------------------|-----------|
-| Customers | `User` (+ derived plan, key prefix, devices, referrals, earnings) | — |
-| Payments | `Payment` | → Customers |
-| Subscriptions | `Subscription` | → Customers |
-| Referrals | `Referral` | → Referrer, Referred |
-| Commissions | `Commission` | → Referrer, Payment |
-| Flags & Abuse | `AbuseEvent` | → Customers |
+| 👥 Customers | `User` (+ derived plan, key prefix, devices, referrals, earnings) | — |
+| 💸 Payments | `Payment` | → Customers |
+| 🔄 Subscriptions | `Subscription` | → Customers |
+| 🤝 Referrals | `Referral` | → Referrer, Referred |
+| 💰 Commissions | `Commission` | → Referrer, Payment |
+| 🚩 Flags & Abuse | `AbuseEvent` | → Customers |
+| 📈 Overview | daily KPI snapshot (revenue, active/paid/trial, signups, flags) | — |
+| 📜 Audit Log | `AuditLog` | — |
+
+Customer pages are icon-tagged by state: 💎 paid · 🧪 trial · ⚪ none.
 
 ## How it works
 - **Mapping table:** `notion_sync(kind, ref) → notion_id, content_hash`. `kind="database"`
@@ -43,10 +48,25 @@ resolve:
 `NOTION_API_BASE`, `NOTION_VERSION`, `NOTION_RECONCILE_MINUTES`. Disabled while
 `NOTION_API_KEY=CHANGE_ME` or no parent page. Setup: `deploy/notion.md`.
 
+## Instant push
+On a paid webhook (and admin `/grant`), `push_user(db, user_id)` mirrors that one
+customer + their latest payment immediately (best-effort, short lock), so new
+sales appear in seconds instead of waiting for the periodic pass.
+
+## Two-way actions (opt-out: `NOTION_ALLOW_ACTIONS`)
+The Customers DB has an **Action** select (`grant_*`/`revoke`/`*_blogger`).
+`apply_actions` (run before reconcile each tick) queries rows with Action set,
+maps the page back to a user via the `notion_sync` table, then **reset-first**
+clears the field and runs the action through the *same* [[Licensing Model|server-side]]
+[[Bot Commands|/grant]]/[[Bot Commands|/revoke]] services (actor `notion`,
+audited). Reset-before-apply guarantees no double-grant on retry. It never
+bypasses [[Zero-Trust Principles|zero-trust]] — a grant issues a real subscription.
+
 ## Admin ([[Bot Commands]])
-- `/notion` — status + links to each database.
+- `/notion` — status + links to each database (+ whether actions are on).
 - `/notion sync` — force a reconcile now.
 
 ## Notes
-- One-way: editing Notion does not change the product; the next sync overwrites
-  synced fields. Full [[API Key|keys]] are never synced — only the public prefix.
+- The mirror is one-way for *display* fields; only the Action field flows back,
+  and only through the secure grant/revoke path. Full [[API Key|keys]] are never
+  synced — only the public prefix.

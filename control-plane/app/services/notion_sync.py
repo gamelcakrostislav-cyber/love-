@@ -17,11 +17,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bot import notify
 from app.core import redis_keys
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -29,22 +30,27 @@ from app.core.redis import redis_client
 from app.integrations import notion as n
 from app.models.abuse_event import AbuseEvent
 from app.models.api_key import ApiKey
+from app.models.audit_log import AuditLog
 from app.models.device import Device
-from app.models.enums import ApiKeyStatus, DeviceStatus, SubscriptionStatus
+from app.models.enums import ApiKeyStatus, DeviceStatus, PaymentStatus, SubscriptionStatus
 from app.models.notion_sync import NotionSync
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.referral import Commission, Referral
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.services import activation, revocation
+from app.services.audit import record_audit
 
 log = get_logger("notion")
 
 _MAX_WRITES_PER_RUN = 60   # bound Notion API traffic per reconcile pass
 _SCAN_LIMIT = 1000         # newest-N rows considered per entity type per pass
 _LOCK_TTL = 600            # seconds; safety release if a run dies mid-flight
+_SCHEMA_VERSION = "2"      # bump to re-patch existing databases (props/icons)
 
-_DB_ORDER = ["customers", "payments", "subscriptions", "referrals", "commissions", "flags"]
+_DB_ORDER = ["customers", "payments", "subscriptions", "referrals", "commissions",
+             "flags", "overview", "audit"]
 _DB_TITLES = {
     "customers": "Customers",
     "payments": "Payments",
@@ -52,7 +58,30 @@ _DB_TITLES = {
     "referrals": "Referrals",
     "commissions": "Commissions",
     "flags": "Flags & Abuse",
+    "overview": "Overview",
+    "audit": "Audit Log",
 }
+_DB_ICONS = {
+    "customers": "👥", "payments": "💸", "subscriptions": "🔄", "referrals": "🤝",
+    "commissions": "💰", "flags": "🚩", "overview": "📈", "audit": "📜",
+}
+
+# Two-way control: the actions the owner can trigger from a Customer's Action field.
+_ACTION_OPTIONS = ["grant_trial", "grant_monthly", "grant_yearly", "revoke",
+                   "mark_blogger", "unmark_blogger"]
+_ACTIONS: dict[str, tuple[str, object]] = {
+    "grant_trial": ("grant", "trial"),
+    "grant_monthly": ("grant", "monthly"),
+    "grant_yearly": ("grant", "yearly"),
+    "revoke": ("revoke", None),
+    "mark_blogger": ("blogger", True),
+    "unmark_blogger": ("blogger", False),
+}
+# Properties added after schema v1 — PATCHed onto already-existing databases.
+def _extra_props(key: str) -> dict | None:
+    if key == "customers":
+        return {"Action": n.s_select_options(_ACTION_OPTIONS), "Last Action": n.s_text()}
+    return None
 
 
 def is_enabled() -> bool:
@@ -78,6 +107,8 @@ def db_schema(key: str, ids: dict[str, str]) -> dict:
             "Expires": n.s_date(), "API Key": n.s_text(), "Devices": n.s_number(),
             "Risk": n.s_number(), "Blogger": n.s_checkbox(), "Referrals": n.s_number(),
             "Earnings": n.s_number("dollar"), "Joined": n.s_date(),
+            # Two-way control: owner sets this to trigger a server-side action.
+            "Action": n.s_select_options(_ACTION_OPTIONS), "Last Action": n.s_text(),
         }
     if key == "payments":
         return {
@@ -111,7 +142,26 @@ def db_schema(key: str, ids: dict[str, str]) -> dict:
             "Event": n.s_title(), "Customer": n.s_relation(ids["customers"]),
             "Type": n.s_select(), "Detail": n.s_text(), "Created": n.s_date(),
         }
+    if key == "overview":
+        return {
+            "Date": n.s_title(), "Customers": n.s_number(), "Active": n.s_number(),
+            "Paid": n.s_number(), "Trial": n.s_number(), "New (24h)": n.s_number(),
+            "Revenue": n.s_number("dollar"), "Payments": n.s_number(),
+            "Pending invoices": n.s_number(), "Commissions": n.s_number("dollar"),
+            "Flagged keys": n.s_number(), "Abuse events": n.s_number(),
+        }
+    if key == "audit":
+        return {
+            "Event": n.s_title(), "Actor": n.s_text(), "Action": n.s_select(),
+            "Target": n.s_text(), "When": n.s_date(),
+        }
     raise KeyError(key)
+
+
+def _customer_icon(status: str, plan: str) -> str:
+    if status != "active":
+        return "⚪"
+    return "🧪" if plan == "trial" else "💎"
 
 
 # ─── Entity -> Notion page property VALUES (pure; testable with stand-ins) ────
@@ -195,6 +245,28 @@ def abuse_props(e, *, customer_page) -> dict:
     }
 
 
+def overview_props(date_str: str, *, customers, active, paid, trial, new24h, revenue,
+                   payments, pending, commissions, flagged, abuse) -> dict:
+    return {
+        "Date": n.title(date_str),
+        "Customers": n.number(customers), "Active": n.number(active),
+        "Paid": n.number(paid), "Trial": n.number(trial), "New (24h)": n.number(new24h),
+        "Revenue": n.number(revenue), "Payments": n.number(payments),
+        "Pending invoices": n.number(pending), "Commissions": n.number(commissions),
+        "Flagged keys": n.number(flagged), "Abuse events": n.number(abuse),
+    }
+
+
+def audit_props(a) -> dict:
+    return {
+        "Event": n.title(f"{a.action} #{a.id}"),
+        "Actor": n.text(a.actor),
+        "Action": n.select(a.action),
+        "Target": n.text(a.target),
+        "When": n.date(a.created_at),
+    }
+
+
 def content_hash(props: dict) -> str:
     return hashlib.sha256(json.dumps(props, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -205,15 +277,15 @@ class _Budget:
         self.left = limit
 
 
-async def _upsert(db, mappings, budget, *, kind, ref, db_id, props) -> str | None:
+async def _upsert(db, mappings, budget, *, kind, ref, db_id, props, icon=None) -> str | None:
     """Create/update one Notion page idempotently; return its page id (or None)."""
-    h = content_hash(props)
+    h = content_hash({"props": props, "icon": icon})
     row = mappings.get((kind, ref))
     if row is None:
         if budget.left <= 0:
             return None  # defer creation to a later pass
         try:
-            page_id = await n.create_page(db_id, props)
+            page_id = await n.create_page(db_id, props, icon=icon)
         except Exception as exc:  # noqa: BLE001 - never abort the pass on one row
             log.warning("notion create %s/%s failed: %s", kind, ref, exc)
             return None
@@ -232,7 +304,7 @@ async def _upsert(db, mappings, budget, *, kind, ref, db_id, props) -> str | Non
         if budget.left <= 0:
             return row.notion_id
         try:
-            await n.update_page(row.notion_id, props)
+            await n.update_page(row.notion_id, properties=props, icon=icon)
         except Exception as exc:  # noqa: BLE001
             log.warning("notion update %s/%s failed: %s", kind, ref, exc)
             return row.notion_id
@@ -242,21 +314,35 @@ async def _upsert(db, mappings, budget, *, kind, ref, db_id, props) -> str | Non
 
 
 async def _ensure_databases(db, mappings) -> dict[str, str] | None:
+    """Create any missing databases (with icons) and evolve existing ones.
+
+    The db mapping's content_hash stores the schema version; when it lags
+    _SCHEMA_VERSION we PATCH the database to add new properties / set its icon,
+    so schema changes reach workspaces created by an older build.
+    """
     ids: dict[str, str] = {}
     created = False
     for key in _DB_ORDER:
+        icon = n.emoji_icon(_DB_ICONS.get(key))
         row = mappings.get(("database", key))
         if row is not None:
             ids[key] = row.notion_id
+            if row.content_hash != _SCHEMA_VERSION:
+                try:
+                    await n.update_database(row.notion_id, properties=_extra_props(key), icon=icon)
+                    row.content_hash = _SCHEMA_VERSION
+                    await db.commit()
+                except Exception as exc:  # noqa: BLE001 - evolution is best-effort
+                    log.warning("notion evolve database %s failed: %s", key, exc)
             continue
         try:
             db_id = await n.create_database(
-                settings.notion_parent_page_id, _DB_TITLES[key], db_schema(key, ids)
+                settings.notion_parent_page_id, _DB_TITLES[key], db_schema(key, ids), icon=icon
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("notion create database %s failed: %s", key, exc)
             return None
-        row = NotionSync(kind="database", ref=key, notion_id=db_id, content_hash=None)
+        row = NotionSync(kind="database", ref=key, notion_id=db_id, content_hash=_SCHEMA_VERSION)
         db.add(row)
         await db.commit()  # durable before the NEXT create_database/page references it
         mappings[("database", key)] = row
@@ -339,14 +425,16 @@ async def reconcile(db: AsyncSession) -> int | None:
         users = list(await db.scalars(select(User).order_by(User.id)))
         for u in users:
             plan_name, expires_at = active.get(u.id, (None, None))
+            status = "active" if plan_name else "inactive"
             props = customer_props(
-                u, plan=plan_name or "none", status="active" if plan_name else "inactive",
+                u, plan=plan_name or "none", status=status,
                 expires_at=expires_at, key_prefix=prefixes.get(u.id),
                 devices=dev_counts.get(u.id, 0), referrals=ref_counts.get(u.id, 0),
                 earnings=earn.get(u.id, 0),
             )
             pid = await _upsert(db, mappings, budget, kind="customer", ref=str(u.id),
-                                db_id=ids["customers"], props=props)
+                                db_id=ids["customers"], props=props,
+                                icon=n.emoji_icon(_customer_icon(status, plan_name or "none")))
             if pid:
                 user_pages[u.id] = pid
         await db.commit()
@@ -427,19 +515,219 @@ async def reconcile(db: AsyncSession) -> int | None:
                           db_id=ids["flags"], props=props)
         await db.commit()
 
+        # 7) Audit-log events.
+        auds = list(await db.scalars(
+            select(AuditLog).order_by(AuditLog.id.desc()).limit(_SCAN_LIMIT)))
+        for a in auds:
+            await _upsert(db, mappings, budget, kind="audit", ref=str(a.id),
+                          db_id=ids["audit"], props=audit_props(a))
+        await db.commit()
+
+        # 8) Overview — a daily KPI snapshot (one row per day, updated through it).
+        await _sync_overview(db, ids, mappings, budget, now)
+        await db.commit()
+
         return _MAX_WRITES_PER_RUN - budget.left
     finally:
         await redis_client.delete(redis_keys.sync_lock("notion"))
+
+
+async def _sync_overview(db, ids, mappings, budget, now: datetime) -> None:
+    total = await db.scalar(select(func.count()).select_from(User)) or 0
+    active = await db.scalar(
+        select(func.count(func.distinct(Subscription.user_id))).where(
+            Subscription.status == SubscriptionStatus.ACTIVE, Subscription.expires_at > now)
+    ) or 0
+    trial = await db.scalar(
+        select(func.count(func.distinct(Subscription.user_id)))
+        .select_from(Subscription).join(Plan, Plan.id == Subscription.plan_id)
+        .where(Subscription.status == SubscriptionStatus.ACTIVE,
+               Subscription.expires_at > now, Plan.is_trial.is_(True))
+    ) or 0
+    revenue = await db.scalar(
+        select(func.coalesce(func.sum(Payment.amount), 0)).where(Payment.status == PaymentStatus.PAID)
+    ) or 0
+    paid_count = await db.scalar(
+        select(func.count()).select_from(Payment).where(Payment.status == PaymentStatus.PAID)) or 0
+    pending = await db.scalar(
+        select(func.count()).select_from(Payment).where(Payment.status == PaymentStatus.PENDING)) or 0
+    commissions = await db.scalar(select(func.coalesce(func.sum(Commission.amount), 0))) or 0
+    flagged = await db.scalar(
+        select(func.count()).select_from(ApiKey).where(ApiKey.flagged.is_(True))) or 0
+    abuse = await db.scalar(select(func.count()).select_from(AbuseEvent)) or 0
+    new24h = await db.scalar(
+        select(func.count()).select_from(User).where(User.created_at > now - timedelta(days=1))) or 0
+
+    date_str = now.strftime("%Y-%m-%d")
+    props = overview_props(
+        date_str, customers=total, active=active, paid=active - trial, trial=trial,
+        new24h=new24h, revenue=revenue, payments=paid_count, pending=pending,
+        commissions=commissions, flagged=flagged, abuse=abuse,
+    )
+    await _upsert(db, mappings, budget, kind="overview", ref=date_str,
+                  db_id=ids["overview"], props=props, icon=n.emoji_icon("📈"))
+
+
+# ─── Instant push (best-effort, on a single user — e.g. right after payment) ──
+async def _one_customer(db, user, now: datetime):
+    """Compute one user's customer props + (status, plan) for an immediate push."""
+    row = (await db.execute(
+        select(Plan.name, Subscription.expires_at)
+        .join(Subscription, Subscription.plan_id == Plan.id)
+        .where(Subscription.user_id == user.id,
+               Subscription.status == SubscriptionStatus.ACTIVE, Subscription.expires_at > now)
+        .order_by(Subscription.expires_at.desc()).limit(1)
+    )).first()
+    plan_name, expires_at = (row[0], row[1]) if row else (None, None)
+    prefix = await db.scalar(
+        select(ApiKey.prefix).where(ApiKey.user_id == user.id, ApiKey.status == ApiKeyStatus.ACTIVE)
+        .order_by(ApiKey.created_at.desc()).limit(1))
+    devices = await db.scalar(
+        select(func.count(Device.id)).join(ApiKey, ApiKey.id == Device.key_id)
+        .where(ApiKey.user_id == user.id, Device.status != DeviceStatus.REMOVED)) or 0
+    referrals = await db.scalar(
+        select(func.count()).select_from(Referral).where(Referral.referrer_user_id == user.id)) or 0
+    earnings = await db.scalar(
+        select(func.coalesce(func.sum(Commission.amount), 0))
+        .where(Commission.referrer_user_id == user.id)) or 0
+    status_label = "active" if plan_name else "inactive"
+    props = customer_props(user, plan=plan_name or "none", status=status_label,
+                           expires_at=expires_at, key_prefix=prefix, devices=devices,
+                           referrals=referrals, earnings=earnings)
+    return props, status_label, (plan_name or "none")
+
+
+async def push_user(db: AsyncSession, user_id: int) -> None:
+    """Immediately mirror one customer (+ their latest payment) to Notion.
+
+    Best-effort and self-guarded. Skips if a full reconcile holds the lock (the
+    periodic pass will cover it) or if the databases aren't provisioned yet.
+    """
+    if not is_enabled():
+        return
+    try:
+        got = await redis_client.set(redis_keys.sync_lock("notion"), "1", nx=True, ex=60)
+        if not got:
+            return
+        try:
+            mappings = await _load_mappings(db)
+            ids = {k: r.notion_id for (kind, k), r in mappings.items() if kind == "database"}
+            if "customers" not in ids:
+                return
+            budget = _Budget(10)
+            now = datetime.now(UTC)
+            user = await db.get(User, user_id)
+            if user is None:
+                return
+            props, status_label, plan_name = await _one_customer(db, user, now)
+            cp = await _upsert(db, mappings, budget, kind="customer", ref=str(user.id),
+                               db_id=ids["customers"], props=props,
+                               icon=n.emoji_icon(_customer_icon(status_label, plan_name)))
+            if cp and "payments" in ids:
+                p = await db.scalar(
+                    select(Payment).where(Payment.user_id == user.id)
+                    .order_by(Payment.id.desc()).limit(1))
+                if p:
+                    await _upsert(db, mappings, budget, kind="payment", ref=str(p.id),
+                                  db_id=ids["payments"], props=payment_props(p, customer_page=cp))
+        finally:
+            await redis_client.delete(redis_keys.sync_lock("notion"))
+    except Exception as exc:  # noqa: BLE001 - never affect the caller (webhook/admin)
+        log.warning("notion push_user failed: %s", exc)
+
+
+# ─── Two-way control: apply actions set from a Notion Customer row ───────────
+async def _apply_one(db, user_id: int, spec: tuple[str, object]) -> None:
+    kind, arg = spec
+    user = await db.get(User, user_id)
+    if user is None:
+        return
+    if kind == "grant":
+        plan = await db.scalar(select(Plan).where(Plan.name == arg))
+        if plan is None:
+            return
+        result = await activation.grant(db, user=user, plan=plan, payment=None, actor="notion")
+        await db.commit()
+        msg = (f"🎁 You've been granted <b>{result.plan_name}</b> until "
+               f"{result.expires_at:%Y-%m-%d}.")
+        if result.new_key_raw:
+            msg += f"\n\n🔑 <b>Your API key (shown once):</b>\n<code>{result.new_key_raw}</code>"
+        await notify.send_message(user.telegram_id, msg)
+    elif kind == "revoke":
+        await revocation.revoke_user(db, user_id=user.id, actor="notion")
+        await db.commit()
+        await notify.send_message(
+            user.telegram_id, "⚠️ Your access has been revoked. Contact support if unexpected.")
+    elif kind == "blogger":
+        user.is_blogger = bool(arg)
+        await record_audit(db, actor="notion", action="set_blogger",
+                           target=str(user.id), meta={"value": bool(arg)})
+        await db.commit()
+
+
+async def apply_actions(db: AsyncSession) -> int:
+    """Apply any actions the owner set on Customer rows in Notion (then clear them).
+
+    Reset-first: the Notion field is cleared BEFORE the action runs, so a crash
+    can never double-apply (a grant adding duration twice). Routed through the
+    same server-side services as admin commands — never bypasses entitlement.
+    """
+    if not (is_enabled() and settings.notion_allow_actions):
+        return 0
+    mappings = await _load_mappings(db)
+    cust_db = mappings.get(("database", "customers"))
+    if cust_db is None:
+        return 0
+    page_to_user = {r.notion_id: int(r.ref)
+                    for (kind, _ref), r in mappings.items() if kind == "customer"}
+    try:
+        pages = await n.query_database(
+            cust_db.notion_id,
+            filter={"property": "Action", "select": {"is_not_empty": True}})
+    except Exception as exc:  # noqa: BLE001
+        log.warning("notion query actions failed: %s", exc)
+        return 0
+
+    applied = 0
+    for page in pages:
+        pid = page.get("id")
+        action = n.read_select(page.get("properties", {}).get("Action"))
+        if not action or action not in _ACTIONS:
+            continue
+        user_id = page_to_user.get(pid)
+        if user_id is None:
+            continue
+        # Reset-first (fail-safe: never double-apply on a later poll).
+        try:
+            await n.update_page(pid, properties={
+                "Action": n.select(None),
+                "Last Action": n.text(f"{action} @ {now_str()}"),
+            })
+        except Exception as exc:  # noqa: BLE001
+            log.warning("notion reset action failed for %s: %s", pid, exc)
+            continue
+        try:
+            await _apply_one(db, user_id, _ACTIONS[action])
+            applied += 1
+            log.info("notion action %s applied to user %s", action, user_id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("notion action %s for user %s failed: %s", action, user_id, exc)
+    return applied
+
+
+def now_str() -> str:
+    return f"{datetime.now(UTC):%Y-%m-%d %H:%M} UTC"
 
 
 async def status(db: AsyncSession) -> dict:
     """Lightweight status for the /notion admin command (no Notion API calls)."""
     mappings = await _load_mappings(db)
     dbs = {k: r.notion_id for (kind, k), r in mappings.items() if kind == "database"}
-    synced = sum(1 for (kind, _) in mappings if kind not in ("database",))
+    synced = sum(1 for (kind, _) in mappings if kind != "database")
     return {
         "enabled": is_enabled(),
         "configured": bool(settings.notion_api_key != "CHANGE_ME" and settings.notion_parent_page_id),
+        "actions": bool(settings.notion_allow_actions),
         "databases": dbs,
         "synced_pages": synced,
     }

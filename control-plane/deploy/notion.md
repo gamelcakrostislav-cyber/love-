@@ -65,17 +65,47 @@ That's it. From now on the worker keeps Notion in sync every few minutes.
 
 | Database | Rows | Key fields |
 |----------|------|-----------|
-| **Customers** | one per user | plan, expiry, API-key prefix, devices, risk, language, referrals, earnings |
-| **Payments** | one per invoice | amount, currency, provider, status, → Customer |
-| **Subscriptions** | one per subscription | plan, status, started/expires, → Customer |
-| **Referrals** | one per invite | type, rate, status, → Referrer & Referred |
-| **Commissions** | one per reward | amount, rate, status, → Referrer & Payment |
-| **Flags & Abuse** | one per event | type, detail, → Customer |
+| 👥 **Customers** | one per user | plan, expiry, API-key prefix, devices, risk, language, referrals, earnings |
+| 💸 **Payments** | one per invoice | amount, currency, provider, status, → Customer |
+| 🔄 **Subscriptions** | one per subscription | plan, status, started/expires, → Customer |
+| 🤝 **Referrals** | one per invite | type, rate, status, → Referrer & Referred |
+| 💰 **Commissions** | one per reward | amount, rate, status, → Referrer & Payment |
+| 🚩 **Flags & Abuse** | one per event | type, detail, → Customer |
+| 📈 **Overview** | one per day | daily KPI snapshot: customers, active/paid/trial, new (24h), revenue, payments, pending, commissions, flags |
+| 📜 **Audit Log** | one per action | actor, action, target, when (every grant/revoke/flag) |
 
 Because the child databases relate back to **Customers**, you can open any
 customer and see all their payments, subscriptions and flags in one place, build
 filtered views ("expiring this week", "flagged"), and chart revenue — all in
-Notion.
+Notion. Customer rows are tagged with an icon at a glance: 💎 paid · 🧪 trial · ⚪ none.
+
+### 📈 Build a chart from the Overview
+The **Overview** database stores one row per day, so you can add a Notion
+**chart/line graph** over it (e.g. Revenue or Active over Date) for an instant
+KPI dashboard. (Notion charts are added in the Notion UI — the bot fills the data.)
+
+## Two-way actions (grant / revoke from Notion)
+
+You can run admin actions straight from a customer row — handy when you're
+already in Notion. On any **Customers** row, set the **Action** field to one of:
+
+| Action | Effect |
+|--------|--------|
+| `grant_trial` / `grant_monthly` / `grant_yearly` | Start/extend that plan (DMs the user their key) |
+| `revoke` | Revoke access (disables keys, kills sessions) |
+| `mark_blogger` / `unmark_blogger` | Toggle the higher referral rate |
+
+Within a few minutes the bot applies it through the **exact same secure path** as
+the `/grant` and `/revoke` commands, clears the Action field, and writes a
+timestamp into **Last Action**. Important guarantees:
+
+- It **never bypasses the zero-trust model** — a grant issues a real server-side
+  subscription, identical to an admin command. Access is always decided by the
+  server, never by Notion.
+- **No double-applies:** the field is cleared *before* the action runs, so a
+  retry can't grant twice.
+- Turn it off entirely with `NOTION_ALLOW_ACTIONS=false` (Notion becomes
+  read-only). Only people you've shared the Notion page with can set actions.
 
 ## Notes & troubleshooting
 

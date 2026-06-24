@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     notion_api_base: str = "https://api.notion.com/v1"
     notion_version: str = "2022-06-28"
     notion_reconcile_minutes: int = 3
+    # Two-way: apply grant/revoke/blogger actions set from a Notion field, routed
+    # through the same server-side path as admin commands (never bypasses access).
+    notion_allow_actions: bool = True
 
     @field_validator("admin_ids", mode="before")
     @classmethod

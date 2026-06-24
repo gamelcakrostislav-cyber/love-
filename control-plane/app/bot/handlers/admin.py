@@ -195,6 +195,9 @@ async def notion_cmd(message: Message, command: CommandObject) -> None:
             lines.append(f"• <a href=\"{notion_sync.page_url(nid)}\">{key}</a>")
     else:
         lines.append("No databases yet — run <code>/notion sync</code> to create them.")
+    if st.get("actions"):
+        lines.append("\n🔁 Two-way actions <b>on</b> — set a Customer's <i>Action</i> "
+                     "field (grant/revoke/blogger) and the bot applies it.")
     lines.append("\nRun <code>/notion sync</code> to push the latest data now.")
     await message.answer("\n".join(lines), parse_mode="HTML",
                          link_preview_options=LinkPreviewOptions(is_disabled=True))
@@ -234,6 +237,7 @@ async def grant_cmd(message: Message, command: CommandObject) -> None:
             db, user=user, plan=plan, payment=None, actor=f"admin:{message.from_user.id}"
         )
         await db.commit()
+        await notion_sync.push_user(db, user.id)  # mirror to Notion immediately
 
     if result.new_key_raw:
         await notify.send_message(

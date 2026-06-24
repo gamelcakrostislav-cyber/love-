@@ -229,20 +229,29 @@ within the entitlement cache window.
 
 ## Notion sync (advanced database / CRM)
 
-Optionally mirror your whole business into a **Notion workspace** as six linked
+Optionally mirror your whole business into a **Notion workspace** as eight linked
 databases — **Customers, Payments, Subscriptions, Referrals, Commissions, Flags &
-Abuse** — so you get a rich, filterable dashboard without touching SQL.
+Abuse, Overview (daily KPIs), Audit Log** — so you get a rich, filterable
+dashboard without touching SQL.
 
-- **Auto-provisioned:** on first run the worker creates the databases under a
-  parent page you share with the integration, and remembers their ids (in the
-  `notion_sync` table). No manual table-building.
-- **Linked, not flat:** child rows (payments, subscriptions, flags…) carry a
-  Notion *relation* back to their Customer, so you get real roll-ups and views.
-- **One-way & best-effort:** a worker job reconciles every
-  `NOTION_RECONCILE_MINUTES` (default 3). Unchanged rows are skipped via a stored
-  content hash; a Redis lock prevents overlapping runs; a per-run write budget
-  keeps us under Notion's ~3 req/s; every call is guarded so a Notion outage
-  never affects the bot.
+- **Auto-provisioned:** on first run the worker creates the databases (with emoji
+  icons) under a parent page you share with the integration, and remembers their
+  ids (in the `notion_sync` table). No manual table-building. A stored schema
+  version lets later builds add new properties/databases to an existing workspace.
+- **Linked, not flat:** child rows carry a Notion *relation* back to their
+  Customer, so you get real roll-ups and views. Customer rows are icon-tagged
+  💎 paid · 🧪 trial · ⚪ none.
+- **KPI dashboard:** the **Overview** database keeps one row per day (revenue,
+  active/paid/trial, signups, flags…) — chart it in Notion for a live dashboard.
+- **One-way mirror + best-effort:** a worker job reconciles every
+  `NOTION_RECONCILE_MINUTES` (default 3); a new sale is pushed within seconds of
+  the paid webhook. Unchanged rows are skipped via a content hash; a Redis lock
+  prevents overlapping runs; a per-run write budget keeps us under Notion's
+  ~3 req/s; every call is guarded so a Notion outage never affects the bot.
+- **Two-way actions (opt-out):** set a Customer's **Action** field
+  (grant/revoke/blogger) and the bot applies it via the *same* server-side path
+  as admin commands — never bypassing entitlement, with reset-first so it can't
+  double-apply. Disable with `NOTION_ALLOW_ACTIONS=false`.
 - **Off by default:** set `NOTION_SYNC_ENABLED=true`, `NOTION_API_KEY` and
   `NOTION_PARENT_PAGE_ID` to enable. Admins check status / force a sync with
   `/notion` and `/notion sync`. Step-by-step setup: [`deploy/notion.md`](deploy/notion.md).
