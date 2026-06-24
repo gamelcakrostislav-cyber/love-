@@ -1,0 +1,9 @@
+# Caddy reverse proxy — automatic HTTPS (Let's Encrypt) in front of the gateway.
+# The domain comes from the DOMAIN env var (set in .env). Caddy obtains and
+# renews the TLS certificate on its own; you do nothing.
+#
+# Crypto Pay will call: https://<DOMAIN>/webhooks/cryptopay
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy gateway:8000
+}

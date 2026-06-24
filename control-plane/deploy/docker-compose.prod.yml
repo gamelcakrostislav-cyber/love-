@@ -1,0 +1,31 @@
+# Production overlay — adds a Caddy reverse proxy that terminates HTTPS in front
+# of the gateway, so Crypto Pay webhooks can reach you over a real domain.
+#
+# Use together with the base compose file:
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+#
+# Requires DOMAIN=your.domain.com in .env (an A record pointing at this server).
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      gateway:
+        condition: service_started
+
+  # In production the gateway is reached only through Caddy, so stop publishing
+  # its port directly to the public internet.
+  gateway:
+    ports: []
+
+volumes:
+  caddydata:
+  caddyconfig:
