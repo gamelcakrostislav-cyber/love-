@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-control}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-control}
@@ -17,6 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
@@ -30,6 +32,7 @@ services:
 
   gateway:
     build: .
+    restart: unless-stopped
     env_file: .env
     command: bash scripts/start_gateway.sh
     ports:
@@ -42,6 +45,7 @@ services:
 
   bot:
     build: .
+    restart: unless-stopped
     env_file: .env
     command: python -m app.bot.main
     depends_on:
@@ -54,6 +58,7 @@ services:
 
   worker:
     build: .
+    restart: unless-stopped
     env_file: .env
     command: python -m app.worker.scheduler
     depends_on:

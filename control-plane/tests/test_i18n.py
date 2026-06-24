@@ -32,3 +32,15 @@ def test_button_action_maps_labels_in_every_language():
 def test_button_action_none_for_plain_text():
     assert i18n.button_action("how much is the monthly plan?") is None
     assert i18n.button_action("") is None
+
+
+def test_command_descriptions_cover_every_language():
+    # Each native "/" menu command must have a (short) description in all langs.
+    for cmd in i18n.COMMAND_ORDER:
+        for lang in i18n.LANGUAGES:
+            desc = i18n.command_description(cmd, lang)
+            assert desc and len(desc) <= 256
+
+
+def test_command_description_falls_back_to_english():
+    assert i18n.command_description("plans", "zz") == i18n.COMMANDS["plans"]["en"]

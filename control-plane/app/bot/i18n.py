@@ -37,6 +37,27 @@ MENU_ORDER = ["plans", "status", "key", "devices", "human", "language", "help"]
 _LABEL_TO_ACTION = {label: action for action, m in _MENU.items() for label in m.values()}
 
 
+# ─── Native command menu (BotFather "/" menu) ────────────────────────────────
+# command -> {lang: short description}. Registered via bot.set_my_commands per
+# language so Telegram shows a localized menu when the user taps the "/" button.
+COMMANDS: dict[str, dict[str, str]] = {
+    "start":    {"en": "Start / choose language", "ru": "Старт / выбрать язык", "uk": "Старт / обрати мову", "es": "Iniciar / elegir idioma", "fr": "Démarrer / choisir la langue"},
+    "plans":    {"en": "See subscription plans", "ru": "Посмотреть тарифы", "uk": "Переглянути тарифи", "es": "Ver planes", "fr": "Voir les forfaits"},
+    "status":   {"en": "Your subscription & expiry", "ru": "Ваша подписка и срок", "uk": "Ваша підписка та термін", "es": "Tu suscripción y vencimiento", "fr": "Votre abonnement et échéance"},
+    "key":      {"en": "Show / reissue API key", "ru": "Показать / перевыпустить ключ", "uk": "Показати / перевипустити ключ", "es": "Ver / reemitir clave API", "fr": "Afficher / réémettre la clé API"},
+    "devices":  {"en": "Manage your devices", "ru": "Управление устройствами", "uk": "Керування пристроями", "es": "Gestionar dispositivos", "fr": "Gérer vos appareils"},
+    "human":    {"en": "Talk to a real person", "ru": "Связаться с человеком", "uk": "Зв'язатися з людиною", "es": "Hablar con una persona", "fr": "Parler à une personne"},
+    "language": {"en": "Change language", "ru": "Сменить язык", "uk": "Змінити мову", "es": "Cambiar idioma", "fr": "Changer de langue"},
+    "help":     {"en": "How the bot works", "ru": "Как работает бот", "uk": "Як працює бот", "es": "Cómo funciona el bot", "fr": "Comment le bot fonctionne"},
+}
+COMMAND_ORDER = ["start", "plans", "status", "key", "devices", "human", "language", "help"]
+
+
+def command_description(command: str, lang: str) -> str:
+    m = COMMANDS[command]
+    return m.get(normalize(lang), m["en"])
+
+
 def menu_label(action: str, lang: str) -> str:
     m = _MENU[action]
     return m.get(normalize(lang), m["en"])
