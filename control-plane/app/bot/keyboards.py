@@ -35,15 +35,21 @@ def main_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 
 def help_keyboard(lang: str) -> InlineKeyboardMarkup:
-    """Support hub: FAQ topics, then talk-to-a-person, then 'Other' (last)."""
+    """Support hub: FAQ topics, then 'Other' (last). The operator option is NOT
+    shown here — it only surfaces after the user explicitly asks for a human."""
     rows = [
         [InlineKeyboardButton(text=i18n.t(lang, "faq_pay"), callback_data="faq:pay")],
         [InlineKeyboardButton(text=i18n.t(lang, "faq_key"), callback_data="faq:key")],
         [InlineKeyboardButton(text=i18n.t(lang, "faq_device"), callback_data="faq:device")],
-        [InlineKeyboardButton(text=i18n.t(lang, "help_human_btn"), callback_data="help:human")],
         [InlineKeyboardButton(text=i18n.t(lang, "help_other_btn"), callback_data="help:other")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def human_offer_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Surfaced only when a user explicitly asks for a person (keyword match)."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=i18n.t(lang, "help_human_btn"), callback_data="help:human")]])
 
 
 def plans_keyboard(plans: list[Plan], lang: str) -> InlineKeyboardMarkup:

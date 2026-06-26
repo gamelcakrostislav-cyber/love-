@@ -26,6 +26,7 @@ from app.bot import i18n
 from app.bot.keyboards import (
     devices_keyboard,
     help_keyboard,
+    human_offer_keyboard,
     language_keyboard,
     main_menu_keyboard,
     plans_keyboard,
@@ -52,6 +53,31 @@ from app.services import (
 )
 
 router = Router(name="client")
+
+
+# Keyword triggers for the operator hand-off. The 'Talk to a person' button is
+# NOT shown by default — it only surfaces once a user's free text contains one
+# of these words (any supported language). Kept lowercase; matched on substrings
+# so "operator", "оператор", "humano", etc. all hit.
+_HUMAN_KEYWORDS = (
+    # en
+    "human", "operator", "agent", "real person", "talk to a person",
+    "live person", "support team", "someone",
+    # ru
+    "оператор", "человек", "живой", "поддержк", "менеджер",
+    # uk
+    "людин", "жива людина",
+    # es
+    "humano", "persona real", "operador", "agente", "hablar con alguien",
+    # fr
+    "humain", "opérateur", "operateur", "conseiller", "vraie personne",
+)
+
+
+def _wants_human(text: str) -> bool:
+    """True when the free text explicitly asks to reach a real person."""
+    low = text.lower()
+    return any(kw in low for kw in _HUMAN_KEYWORDS)
 
 
 # ─── Small helpers ───────────────────────────────────────────────────────────
@@ -571,6 +597,14 @@ async def support_or_relay(message: Message) -> None:
             f"💬 <b>{uname}</b> (id <code>{message.from_user.id}</code>): {text}"
         )
         await message.answer(i18n.t(lang, "sent_to_team"))
+        return
+
+    # 2b. Explicit operator request: only when the user's words ask for a human
+    # do we surface the 'Talk to a person' button (it's never shown in Help by
+    # default). One tap then escalates via the help:human callback.
+    if _wants_human(text):
+        await message.answer(i18n.t(lang, "human_offer"),
+                             reply_markup=human_offer_keyboard(lang))
         return
 
     # 3. AI assistant (replies in the user's chosen language).

@@ -167,6 +167,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "help_other_prompt": "💬 Go ahead — type your question and our assistant will help.",
         "feedback_prompt": "💬 <b>We'd love your ideas!</b> What should we add or improve? Type your suggestion below and it goes straight to our team.",
         "feedback_thanks": "✅ Thank you! Your feedback was sent to our team. 🙏",
+        "human_offer": "🗣 It sounds like you'd like to talk to a real person. Tap below to connect — or just keep typing and the assistant will help.",
     },
     "ru": {
         "choose_language": "🌐 Пожалуйста, выберите язык:",
@@ -261,6 +262,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "help_other_prompt": "💬 Пишите — задайте вопрос текстом, и ассистент поможет.",
         "feedback_prompt": "💬 <b>Нам важны ваши идеи!</b> Что добавить или улучшить? Напишите предложение ниже — оно сразу уйдёт нашей команде.",
         "feedback_thanks": "✅ Спасибо! Ваш отзыв отправлен нашей команде. 🙏",
+        "human_offer": "🗣 Похоже, вы хотите связаться с человеком. Нажмите ниже, чтобы соединиться — или продолжайте писать, и ассистент поможет.",
     },
     "uk": {
         "choose_language": "🌐 Будь ласка, оберіть мову:",
@@ -355,6 +357,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "help_other_prompt": "💬 Пишіть — поставте запитання текстом, і асистент допоможе.",
         "feedback_prompt": "💬 <b>Нам важливі ваші ідеї!</b> Що додати чи покращити? Напишіть пропозицію нижче — вона одразу піде нашій команді.",
         "feedback_thanks": "✅ Дякуємо! Ваш відгук надіслано нашій команді. 🙏",
+        "human_offer": "🗣 Схоже, ви хочете зв'язатися з людиною. Натисніть нижче, щоб з'єднатися — або продовжуйте писати, і асистент допоможе.",
     },
     "es": {
         "choose_language": "🌐 Por favor, elige tu idioma:",
@@ -449,6 +452,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "help_other_prompt": "💬 Adelante — escribe tu pregunta y el asistente te ayudará.",
         "feedback_prompt": "💬 <b>¡Nos encantan tus ideas!</b> ¿Qué deberíamos añadir o mejorar? Escribe tu sugerencia abajo y llega directo a nuestro equipo.",
         "feedback_thanks": "✅ ¡Gracias! Tu sugerencia se envió a nuestro equipo. 🙏",
+        "human_offer": "🗣 Parece que quieres hablar con una persona real. Pulsa abajo para conectar — o sigue escribiendo y el asistente te ayudará.",
     },
     "fr": {
         "choose_language": "🌐 Veuillez choisir votre langue :",
@@ -543,6 +547,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "help_other_prompt": "💬 Allez-y — écrivez votre question et l'assistant vous aidera.",
         "feedback_prompt": "💬 <b>Vos idées nous intéressent !</b> Que devrions-nous ajouter ou améliorer ? Écrivez votre suggestion ci-dessous, elle ira directement à notre équipe.",
         "feedback_thanks": "✅ Merci ! Votre avis a été envoyé à notre équipe. 🙏",
+        "human_offer": "🗣 On dirait que vous souhaitez parler à une vraie personne. Appuyez ci-dessous pour vous connecter — ou continuez à écrire et l'assistant vous aidera.",
     },
 }
 

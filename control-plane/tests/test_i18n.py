@@ -99,8 +99,21 @@ def test_support_hub_and_feedback_strings_in_every_language():
         assert i18n.button_action(i18n.menu_label("feedback", lang)) == "feedback"
         for k in ("help_intro", "faq_pay", "faq_pay_a", "faq_key", "faq_key_a",
                   "faq_device", "faq_device_a", "help_human_btn", "help_other_btn",
-                  "help_other_prompt", "feedback_prompt", "feedback_thanks"):
+                  "help_other_prompt", "feedback_prompt", "feedback_thanks",
+                  "human_offer"):
             assert i18n.t(lang, k)
+
+
+def test_human_keyword_surfaces_operator_offer():
+    # The 'Talk to a person' button is keyword-gated: plain questions never
+    # trigger it, but an explicit ask for a human (in any language) does.
+    from app.bot.handlers.client import _wants_human
+    assert not _wants_human("how much is the monthly plan?")
+    assert not _wants_human("")
+    for phrase in ("can I talk to a human?", "I need an operator",
+                   "соедините с оператором", "quiero hablar con un humano",
+                   "je veux parler à un humain", "хочу живу людину"):
+        assert _wants_human(phrase)
 
 
 def test_growth_strings_in_every_language():
