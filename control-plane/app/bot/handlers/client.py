@@ -195,8 +195,11 @@ async def show_help(message: Message, lang: str) -> None:
 
 
 async def show_feedback(message: Message, lang: str) -> None:
-    """Arm 'feedback mode' so the user's next message is captured as a suggestion."""
-    await redis_client.set(redis_keys.feedback_mode(message.from_user.id), "1", ex=3600)
+    """Arm 'feedback mode' so the user's next message is captured as a suggestion.
+
+    Short TTL + cancel-on-navigation (see the catch-all) keep this from later
+    swallowing an ordinary question."""
+    await redis_client.set(redis_keys.feedback_mode(message.from_user.id), "1", ex=300)
     await message.answer(i18n.t(lang, "feedback_prompt"), parse_mode="HTML")
 
 
@@ -614,6 +617,11 @@ async def support_or_relay(message: Message) -> None:
 
     # 1. Menu button taps route to their action (works in any language / state).
     action = i18n.button_action(text)
+    # Tapping any menu button (other than Feedback itself) cancels a pending
+    # feedback capture — so a question typed after browsing the menu is never
+    # mistaken for feedback.
+    if action and action != "feedback":
+        await redis_client.delete(redis_keys.feedback_mode(message.from_user.id))
     if action == "human":
         await _human_flow(message)
         return
