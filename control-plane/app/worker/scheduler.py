@@ -15,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
-from app.services import alerts, notifications, notion_sync, reminders, revocation
+from app.services import alerts, growth, notifications, notion_sync, reminders, revocation
 
 log = get_logger("worker")
 
@@ -55,8 +55,9 @@ async def notifications_tick() -> None:
         async with SessionFactory() as db:
             drip = await notifications.drip_sweep(db)
             digest = await notifications.digest_sweep(db)
-        if drip or digest:
-            log.info("notifications: %d drip, %d digest", drip, digest)
+            mile = await growth.milestone_sweep(db)
+        if drip or digest or mile:
+            log.info("notifications: %d drip, %d digest, %d milestone", drip, digest, mile)
     except Exception as exc:  # noqa: BLE001 - notifications must never crash the worker
         log.warning("notifications sweep failed: %s", exc)
 
@@ -98,13 +99,13 @@ async def main() -> None:
         )
         log.info("reminders enabled — sweep every %d min", settings.expiry_reminder_minutes)
 
-    if notifications.drip_enabled() or notifications.digest_enabled():
-        scheduler.add_job(
-            notifications_tick, trigger="interval",
-            minutes=max(15, settings.notifications_minutes),
-            next_run_time=datetime.now(UTC), max_instances=1, coalesce=True,
-        )
-        log.info("client notifications enabled — drip + weekly digest")
+    # Always on: drip/digest self-guard on their flags; milestone rewards always run.
+    scheduler.add_job(
+        notifications_tick, trigger="interval",
+        minutes=max(15, settings.notifications_minutes),
+        next_run_time=datetime.now(UTC), max_instances=1, coalesce=True,
+    )
+    log.info("client notifications enabled — drip, digest, milestones")
 
     if alerts.is_enabled():
         scheduler.add_job(

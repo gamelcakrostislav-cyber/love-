@@ -9,9 +9,17 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from urllib.parse import quote
+
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import CallbackQuery, LinkPreviewOptions, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+    Message,
+)
 from sqlalchemy import func, select
 
 from app.bot import i18n
@@ -29,6 +37,7 @@ from app.models.plan import Plan
 from app.models.referral import Commission, Referral
 from app.services import devices as devices_svc
 from app.services import (
+    growth,
     handoff,
     keys,
     payments,
@@ -166,13 +175,41 @@ async def show_referrals(message: Message, lang: str) -> None:
             select(func.coalesce(func.sum(Commission.amount), 0))
             .where(Commission.referrer_user_id == user.id)) or 0
         is_blogger = user.is_blogger
+        pending = await growth.pending_count(db, user.id)
+        rank_info = await growth.user_rank(db, user.id)
     rate = settings.referral_rate_blogger if is_blogger else settings.referral_rate_standard
     link = f"https://t.me/{me.username}?start={message.from_user.id}"
-    await message.answer(
-        i18n.t(lang, "referrals_block", rate=int(round(rate * 100)), link=link,
-               invited=invited, qualified=qualified, earned=f"{earned} USD"),
-        parse_mode="HTML", link_preview_options=LinkPreviewOptions(is_disabled=True),
-    )
+    body = i18n.t(lang, "referrals_block", rate=int(round(rate * 100)), link=link,
+                  invited=invited, qualified=qualified, earned=f"{earned} USD")
+    body += "\n" + i18n.t(lang, "referrals_more",
+                          pending=pending, rank=rank_info[0] if rank_info else "—")
+    share_url = (f"https://t.me/share/url?url={quote(link)}"
+                 f"&text={quote(i18n.t(lang, 'referrals_share_text'))}")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=i18n.t(lang, "referrals_share"), url=share_url),
+        InlineKeyboardButton(text=i18n.t(lang, "leaderboard_btn"), callback_data="act:leaderboard"),
+    ]])
+    await message.answer(body, parse_mode="HTML", reply_markup=kb,
+                         link_preview_options=LinkPreviewOptions(is_disabled=True))
+
+
+async def show_leaderboard(message: Message, lang: str, telegram_id: int) -> None:
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    async with SessionFactory() as db:
+        board = await growth.leaderboard(db, limit=10)
+        user = await users.get_by_telegram_id(db, telegram_id)
+        rank_info = await growth.user_rank(db, user.id) if user else None
+    if not board:
+        await message.answer(i18n.t(lang, "leaderboard_empty"), parse_mode="HTML")
+        return
+    lines = [i18n.t(lang, "leaderboard_header")]
+    for rank, handle, earned, count in board:
+        lines.append(f"{medals.get(rank, f'{rank}.')} {handle} — {earned} USD · {count}")
+    text = "\n".join(lines)
+    if rank_info:
+        text += i18n.t(lang, "leaderboard_you", rank=rank_info[0],
+                       earned=f"{rank_info[1]} USD", count=rank_info[2])
+    await message.answer(text, parse_mode="HTML")
 
 
 async def open_language(message: Message) -> None:
@@ -300,6 +337,19 @@ async def _set_opt_out(message: Message, value: bool, key: str) -> None:
         lang = i18n.normalize(user.language)
         await db.commit()
     await message.answer(i18n.t(lang, key), parse_mode="HTML")
+
+
+@router.message(Command("leaderboard"))
+async def leaderboard_cmd(message: Message) -> None:
+    lang = await _user_lang(message.from_user.id)
+    await show_leaderboard(message, lang, message.from_user.id)
+
+
+@router.callback_query(F.data == "act:leaderboard")
+async def leaderboard_callback(cb: CallbackQuery) -> None:
+    lang = await _user_lang(cb.from_user.id)
+    await show_leaderboard(cb.message, lang, cb.from_user.id)
+    await cb.answer()
 
 
 @router.message(Command("mute"))

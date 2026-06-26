@@ -76,3 +76,8 @@ def drip(user_id: int, day: int) -> str:
 def digest(user_id: int) -> str:
     """Marker (7-day TTL) that this user already got their weekly digest."""
     return f"digest:{user_id}"
+
+
+def milestone(user_id: int) -> str:
+    """Highest referral milestone already celebrated for a referrer."""
+    return f"growth:milestone:{user_id}"

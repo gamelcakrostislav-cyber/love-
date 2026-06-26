@@ -183,7 +183,8 @@ Client commands (aiogram 3.x long-polling):
 | `/status` | subscription, expiry, API-key prefix |
 | `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
 | `/devices` | list registered devices; remove one to free a slot |
-| `/referrals` | your invite link + stats (invited / paid / earned) and your rate |
+| `/referrals` | invite link + stats (invited / pending / paid / earned), your rank, **Share** & **🏆 Leaderboard** buttons |
+| `/leaderboard` | top referrers by earnings + your own rank (gamified growth loop) |
 | `/mute` · `/unmute` | opt out of / back into promotional pushes (transactional DMs always send) |
 | `/human` | hand off to a human (admins); free text otherwise goes to the AI agent |
 | `/help` | command list |
