@@ -100,8 +100,10 @@ def test_support_hub_and_feedback_strings_in_every_language():
         for k in ("help_intro", "faq_pay", "faq_pay_a", "faq_key", "faq_key_a",
                   "faq_device", "faq_device_a", "help_human_btn", "help_other_btn",
                   "help_other_prompt", "feedback_prompt", "feedback_thanks",
-                  "human_offer"):
+                  "human_offer", "human_hint"):
             assert i18n.t(lang, k)
+        # human_hint is appended to a plain-text AI reply — must carry no HTML.
+        assert "<" not in i18n.t(lang, "human_hint")
 
 
 def test_human_keyword_surfaces_operator_offer():
