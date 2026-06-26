@@ -86,3 +86,8 @@ def milestone(user_id: int) -> str:
 def feedback_mode(telegram_id: int) -> str:
     """Flag: the user's next message should be captured as feedback (short TTL)."""
     return f"feedback:mode:{telegram_id}"
+
+
+def promo_armed(telegram_id: int) -> str:
+    """The promo code a user applied via /promo, used on their next purchase."""
+    return f"promo:armed:{telegram_id}"

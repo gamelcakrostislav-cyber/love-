@@ -116,6 +116,21 @@ def test_human_keyword_surfaces_operator_offer():
         assert _wants_human(phrase)
 
 
+def test_promo_strings_in_every_language():
+    assert "promo" in i18n.COMMAND_ORDER
+    for lang in i18n.LANGUAGES:
+        assert i18n.t(lang, "promo_usage")
+        assert "{" not in i18n.t(lang, "promo_applied", code="SAVE20", desc="20% off")
+        assert "{" not in i18n.t(lang, "promo_invalid", code="SAVE20")
+        assert "{" not in i18n.t(lang, "promo_used", code="SAVE20")
+        assert "{" not in i18n.t(lang, "promo_plan_mismatch", code="SAVE20", plan="monthly")
+        assert "{" not in i18n.t(lang, "promo_maxed", code="SAVE20")
+        out = i18n.t(lang, "buy_invoice_promo", name="monthly", code="SAVE20",
+                     desc="20% off", original="49.00", price="39.20",
+                     currency="USD", url="https://t.me/x")
+        assert "{" not in out and "}" not in out
+
+
 def test_growth_strings_in_every_language():
     for lang in i18n.LANGUAGES:
         for k in ("referrals_share", "referrals_share_text", "leaderboard_btn",

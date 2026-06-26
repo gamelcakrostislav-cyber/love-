@@ -9,6 +9,7 @@ from app.models.feedback import Feedback
 from app.models.notion_sync import NotionSync
 from app.models.payment import Payment
 from app.models.plan import Plan
+from app.models.promo_code import PromoCode, PromoRedemption
 from app.models.referral import Commission, Referral
 from app.models.session import Session
 from app.models.subscription import Subscription
@@ -24,6 +25,8 @@ __all__ = [
     "NotionSync",
     "Payment",
     "Plan",
+    "PromoCode",
+    "PromoRedemption",
     "Commission",
     "Referral",
     "Session",

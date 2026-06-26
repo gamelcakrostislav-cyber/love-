@@ -46,6 +46,7 @@ from app.services import (
     handoff,
     keys,
     payments,
+    promos,
     referrals,
     subscriptions,
     support,
@@ -444,14 +445,77 @@ async def human_cmd(message: Message) -> None:
     await _human_flow(message)
 
 
+# ─── Promo / discount codes ──────────────────────────────────────────────────
+# Terminal errors clear the armed code; a plan mismatch keeps it (it may apply to
+# another plan the user buys instead).
+_PROMO_ERROR_STRING = {
+    promos.PromoError.INVALID: "promo_invalid",
+    promos.PromoError.MAXED: "promo_maxed",
+    promos.PromoError.ALREADY_USED: "promo_used",
+    promos.PromoError.PLAN_MISMATCH: "promo_plan_mismatch",
+}
+_PROMO_TERMINAL = {
+    promos.PromoError.INVALID, promos.PromoError.MAXED, promos.PromoError.ALREADY_USED,
+}
+
+
+async def _armed_promo(telegram_id: int) -> str | None:
+    return await redis_client.get(redis_keys.promo_armed(telegram_id))
+
+
+async def _disarm_promo(telegram_id: int) -> None:
+    await redis_client.delete(redis_keys.promo_armed(telegram_id))
+
+
+@router.message(Command("promo"))
+async def promo_cmd(message: Message, command: CommandObject) -> None:
+    """/promo <code> — validate a discount code and arm it for the next purchase."""
+    lang = await _user_lang(message.from_user.id)
+    code = promos.normalize(command.args or "")
+    if not code:
+        await message.answer(i18n.t(lang, "promo_usage"), parse_mode="HTML")
+        return
+    async with SessionFactory() as db:
+        promo = await promos.get(db, code)
+        ok = (
+            promo is not None and promo.is_active
+            and (promo.expires_at is None or promo.expires_at > datetime.now(UTC))
+            and (promo.max_redemptions is None or promo.times_redeemed < promo.max_redemptions)
+        )
+        desc = promos.describe(promo) if promo else ""
+    if not ok:
+        await message.answer(i18n.t(lang, "promo_invalid", code=code), parse_mode="HTML")
+        return
+    await redis_client.set(redis_keys.promo_armed(message.from_user.id), code, ex=1800)
+    await message.answer(i18n.t(lang, "promo_applied", code=code, desc=desc), parse_mode="HTML")
+
+
 # ─── Buy ─────────────────────────────────────────────────────────────────────
-async def _do_buy(db, telegram_id: int, username: str | None, plan_name: str, lang: str) -> str:
+async def _do_buy(
+    db, telegram_id: int, username: str | None, plan_name: str, lang: str,
+    code: str | None = None,
+) -> str:
     user, _ = await users.get_or_create(db, telegram_id=telegram_id, username=username)
     plan = await db.scalar(
         select(Plan).where(Plan.name == plan_name, Plan.is_active.is_(True))
     )
     if plan is None:
         return i18n.t(lang, "buy_unknown")
+
+    # A code passed inline (/buy plan code) wins; otherwise use one armed via /promo.
+    code = promos.normalize(code) if code else await _armed_promo(telegram_id)
+    if code:
+        result = await promos.quote(db, code=code, user_id=user.id, plan=plan)
+        if isinstance(result, str):  # validation failed — `result` is the reason
+            if result in _PROMO_TERMINAL:
+                await _disarm_promo(telegram_id)
+            return i18n.t(lang, _PROMO_ERROR_STRING[result], code=code, plan=plan.name)
+        _payment, pay_url = await payments.start_checkout(
+            db, user=user, plan=plan, amount=result.final, promo=result.promo)
+        return i18n.t(lang, "buy_invoice_promo", name=plan.name, code=result.promo.code,
+                      desc=result.description, original=result.original,
+                      price=result.final, currency=plan.currency, url=pay_url)
+
     _payment, pay_url = await payments.start_checkout(db, user=user, plan=plan)
     return i18n.t(lang, "buy_invoice", name=plan.name, price=plan.price,
                   currency=plan.currency, url=pay_url)
@@ -459,13 +523,16 @@ async def _do_buy(db, telegram_id: int, username: str | None, plan_name: str, la
 
 @router.message(Command("buy"))
 async def buy_cmd(message: Message, command: CommandObject) -> None:
-    plan_name = (command.args or "").strip().lower()
+    parts = (command.args or "").split()
     lang = await _user_lang(message.from_user.id)
-    if not plan_name:
+    if not parts:
         await show_plans(message, lang)
         return
+    plan_name = parts[0].lower()
+    code = parts[1] if len(parts) > 1 else None
     async with SessionFactory() as db:
-        text = await _do_buy(db, message.from_user.id, message.from_user.username, plan_name, lang)
+        text = await _do_buy(
+            db, message.from_user.id, message.from_user.username, plan_name, lang, code)
         await db.commit()
     await message.answer(text, parse_mode="HTML")
 

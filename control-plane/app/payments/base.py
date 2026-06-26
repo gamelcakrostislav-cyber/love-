@@ -35,7 +35,12 @@ class PaymentProvider(ABC):
     name: str
 
     @abstractmethod
-    async def create_invoice(self, user: User, plan: Plan) -> InvoiceResult: ...
+    async def create_invoice(
+        self, user: User, plan: Plan, amount: Decimal | None = None
+    ) -> InvoiceResult:
+        """Invoice for `plan`. `amount` overrides the plan price (e.g. after a
+        promo discount); when None the full `plan.price` is charged."""
+        ...
 
     @abstractmethod
     def verify_webhook(self, body: bytes, signature: str | None) -> bool: ...

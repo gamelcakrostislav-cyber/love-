@@ -179,7 +179,8 @@ Client commands (aiogram 3.x long-polling):
 |---|---|
 | `/start [ref]` | provision account; `ref` = inviter's Telegram id captures a referral |
 | `/plans` | list plans (inline buy buttons) |
-| `/buy <plan>` | create an invoice (Crypto Pay wired in Phase 6) |
+| `/buy <plan> [code]` | create an invoice (Crypto Pay wired in Phase 6); optional discount code |
+| `/promo <code>` | apply a discount code; the next purchase uses it (valid 30 min) |
 | `/status` | subscription, expiry, API-key prefix |
 | `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
 | `/devices` | list registered devices; remove one to free a slot |
@@ -200,6 +201,9 @@ Admin commands (Telegram ids in `ADMIN_IDS`):
 | `/stats` | active users, sessions, paid revenue, flagged + abuse counts |
 | `/grant <telegram_id> <plan>` | grant/extend access (reuses webhook activation) |
 | `/revoke <telegram_id>` | revoke subscription, disable keys, kill sessions |
+| `/promonew <code> <pct\|fixed> <value> [plan] [max] [days]` | create a discount code |
+| `/promos` | list discount codes with usage |
+| `/promooff <code>` | deactivate a discount code |
 | `/flags` | review flagged keys + recent abuse events |
 | `/unflag <key_prefix\|id>` | clear a flag |
 | `/reply <telegram_id> <message>` | answer a user in a human handoff |

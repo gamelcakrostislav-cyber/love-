@@ -53,9 +53,10 @@ COMMANDS: dict[str, dict[str, str]] = {
     "referrals": {"en": "Your invite link & earnings", "ru": "Ваша ссылка и доход", "uk": "Ваше посилання та дохід", "es": "Tu enlace y ganancias", "fr": "Votre lien et vos gains"},
     "help":     {"en": "Help & support", "ru": "Помощь и поддержка", "uk": "Допомога та підтримка", "es": "Ayuda y soporte", "fr": "Aide et support"},
     "feedback": {"en": "Send feedback / ideas", "ru": "Оставить отзыв / идеи", "uk": "Залишити відгук / ідеї", "es": "Enviar sugerencias / ideas", "fr": "Envoyer un avis / des idées"},
+    "promo":    {"en": "Apply a discount code", "ru": "Применить промокод", "uk": "Застосувати промокод", "es": "Aplicar un código de descuento", "fr": "Appliquer un code promo"},
     "language": {"en": "Change language", "ru": "Сменить язык", "uk": "Змінити мову", "es": "Cambiar idioma", "fr": "Changer de langue"},
 }
-COMMAND_ORDER = ["start", "plans", "status", "key", "devices", "referrals", "help", "feedback", "language"]
+COMMAND_ORDER = ["start", "plans", "status", "key", "devices", "referrals", "help", "feedback", "promo", "language"]
 
 
 def command_description(command: str, lang: str) -> str:
@@ -168,6 +169,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "feedback_prompt": "💬 <b>We'd love your ideas!</b> What should we add or improve? Type your suggestion below and it goes straight to our team.",
         "feedback_thanks": "✅ Thank you! Your feedback was sent to our team. 🙏",
         "human_offer": "🗣 It sounds like you'd like to talk to a real person. Tap below to connect — or just keep typing and the assistant will help.",
+        "promo_usage": "🏷 <b>Discount code</b>\nSend <code>/promo YOURCODE</code> to apply a code, then tap 📋 Plans and Buy.",
+        "promo_applied": "✅ Promo <b>{code}</b> applied — {desc}. Tap 📋 Plans and Buy to use it (valid for 30 min).",
+        "promo_invalid": "❌ Code <b>{code}</b> isn't valid or has expired.",
+        "promo_used": "❌ You've already used the code <b>{code}</b>.",
+        "promo_plan_mismatch": "❌ Code <b>{code}</b> doesn't apply to the {plan} plan.",
+        "promo_maxed": "❌ Code <b>{code}</b> has reached its redemption limit.",
+        "buy_invoice_promo": "🧾 Invoice for <b>{name}</b>\n💸 <b>{code}</b> ({desc}): <s>{original} {currency}</s> → <b>{price} {currency}</b>\nPay here: {url}\n\nYour subscription activates automatically once payment is confirmed.",
     },
     "ru": {
         "choose_language": "🌐 Пожалуйста, выберите язык:",
@@ -263,6 +271,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "feedback_prompt": "💬 <b>Нам важны ваши идеи!</b> Что добавить или улучшить? Напишите предложение ниже — оно сразу уйдёт нашей команде.",
         "feedback_thanks": "✅ Спасибо! Ваш отзыв отправлен нашей команде. 🙏",
         "human_offer": "🗣 Похоже, вы хотите связаться с человеком. Нажмите ниже, чтобы соединиться — или продолжайте писать, и ассистент поможет.",
+        "promo_usage": "🏷 <b>Промокод</b>\nОтправьте <code>/promo ВАШКОД</code>, чтобы применить код, затем нажмите 📋 Тарифы и Купить.",
+        "promo_applied": "✅ Промокод <b>{code}</b> применён — {desc}. Нажмите 📋 Тарифы и Купить (действует 30 мин).",
+        "promo_invalid": "❌ Код <b>{code}</b> недействителен или истёк.",
+        "promo_used": "❌ Вы уже использовали код <b>{code}</b>.",
+        "promo_plan_mismatch": "❌ Код <b>{code}</b> не подходит для тарифа {plan}.",
+        "promo_maxed": "❌ Код <b>{code}</b> исчерпал лимит активаций.",
+        "buy_invoice_promo": "🧾 Счёт за <b>{name}</b>\n💸 <b>{code}</b> ({desc}): <s>{original} {currency}</s> → <b>{price} {currency}</b>\nОплатить: {url}\n\nПодписка активируется автоматически после оплаты.",
     },
     "uk": {
         "choose_language": "🌐 Будь ласка, оберіть мову:",
@@ -358,6 +373,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "feedback_prompt": "💬 <b>Нам важливі ваші ідеї!</b> Що додати чи покращити? Напишіть пропозицію нижче — вона одразу піде нашій команді.",
         "feedback_thanks": "✅ Дякуємо! Ваш відгук надіслано нашій команді. 🙏",
         "human_offer": "🗣 Схоже, ви хочете зв'язатися з людиною. Натисніть нижче, щоб з'єднатися — або продовжуйте писати, і асистент допоможе.",
+        "promo_usage": "🏷 <b>Промокод</b>\nНадішліть <code>/promo ВАШКОД</code>, щоб застосувати код, потім натисніть 📋 Тарифи і Купити.",
+        "promo_applied": "✅ Промокод <b>{code}</b> застосовано — {desc}. Натисніть 📋 Тарифи і Купити (діє 30 хв).",
+        "promo_invalid": "❌ Код <b>{code}</b> недійсний або прострочений.",
+        "promo_used": "❌ Ви вже використали код <b>{code}</b>.",
+        "promo_plan_mismatch": "❌ Код <b>{code}</b> не підходить для тарифу {plan}.",
+        "promo_maxed": "❌ Код <b>{code}</b> вичерпав ліміт активацій.",
+        "buy_invoice_promo": "🧾 Рахунок за <b>{name}</b>\n💸 <b>{code}</b> ({desc}): <s>{original} {currency}</s> → <b>{price} {currency}</b>\nОплатити: {url}\n\nПідписка активується автоматично після оплати.",
     },
     "es": {
         "choose_language": "🌐 Por favor, elige tu idioma:",
@@ -453,6 +475,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "feedback_prompt": "💬 <b>¡Nos encantan tus ideas!</b> ¿Qué deberíamos añadir o mejorar? Escribe tu sugerencia abajo y llega directo a nuestro equipo.",
         "feedback_thanks": "✅ ¡Gracias! Tu sugerencia se envió a nuestro equipo. 🙏",
         "human_offer": "🗣 Parece que quieres hablar con una persona real. Pulsa abajo para conectar — o sigue escribiendo y el asistente te ayudará.",
+        "promo_usage": "🏷 <b>Código de descuento</b>\nEnvía <code>/promo TUCODIGO</code> para aplicar un código, luego pulsa 📋 Planes y Comprar.",
+        "promo_applied": "✅ Código <b>{code}</b> aplicado — {desc}. Pulsa 📋 Planes y Comprar para usarlo (válido 30 min).",
+        "promo_invalid": "❌ El código <b>{code}</b> no es válido o ha caducado.",
+        "promo_used": "❌ Ya has usado el código <b>{code}</b>.",
+        "promo_plan_mismatch": "❌ El código <b>{code}</b> no se aplica al plan {plan}.",
+        "promo_maxed": "❌ El código <b>{code}</b> alcanzó su límite de usos.",
+        "buy_invoice_promo": "🧾 Factura de <b>{name}</b>\n💸 <b>{code}</b> ({desc}): <s>{original} {currency}</s> → <b>{price} {currency}</b>\nPaga aquí: {url}\n\nTu suscripción se activa automáticamente tras el pago.",
     },
     "fr": {
         "choose_language": "🌐 Veuillez choisir votre langue :",
@@ -548,6 +577,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "feedback_prompt": "💬 <b>Vos idées nous intéressent !</b> Que devrions-nous ajouter ou améliorer ? Écrivez votre suggestion ci-dessous, elle ira directement à notre équipe.",
         "feedback_thanks": "✅ Merci ! Votre avis a été envoyé à notre équipe. 🙏",
         "human_offer": "🗣 On dirait que vous souhaitez parler à une vraie personne. Appuyez ci-dessous pour vous connecter — ou continuez à écrire et l'assistant vous aidera.",
+        "promo_usage": "🏷 <b>Code de réduction</b>\nEnvoyez <code>/promo VOTRECODE</code> pour appliquer un code, puis appuyez sur 📋 Forfaits et Acheter.",
+        "promo_applied": "✅ Code <b>{code}</b> appliqué — {desc}. Appuyez sur 📋 Forfaits et Acheter pour l'utiliser (valable 30 min).",
+        "promo_invalid": "❌ Le code <b>{code}</b> est invalide ou expiré.",
+        "promo_used": "❌ Vous avez déjà utilisé le code <b>{code}</b>.",
+        "promo_plan_mismatch": "❌ Le code <b>{code}</b> ne s'applique pas au forfait {plan}.",
+        "promo_maxed": "❌ Le code <b>{code}</b> a atteint sa limite d'utilisations.",
+        "buy_invoice_promo": "🧾 Facture pour <b>{name}</b>\n💸 <b>{code}</b> ({desc}) : <s>{original} {currency}</s> → <b>{price} {currency}</b>\nPayez ici : {url}\n\nVotre abonnement s'active automatiquement après le paiement.",
     },
 }
 

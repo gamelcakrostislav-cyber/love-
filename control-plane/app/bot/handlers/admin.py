@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 
 from aiogram import Router
 from aiogram.filters import BaseFilter, Command, CommandObject
@@ -26,12 +27,22 @@ from app.models.enums import PaymentStatus, SubscriptionStatus
 from app.models.feedback import Feedback
 from app.models.payment import Payment
 from app.models.plan import Plan
+from app.models.promo_code import DISCOUNT_FIXED, DISCOUNT_PERCENT
 from app.models.referral import Commission, Referral
 from app.models.session import Session
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services import activation, devices as devices_svc
-from app.services import handoff, keys, notifications, notion_sync, revocation, subscriptions, users
+from app.services import (
+    handoff,
+    keys,
+    notifications,
+    notion_sync,
+    promos,
+    revocation,
+    subscriptions,
+    users,
+)
 from app.services.audit import record_audit
 from app.bot import notify
 
@@ -219,6 +230,9 @@ async def admin_help_cmd(message: Message) -> None:
         "/notion [sync] — Notion CRM status / sync now\n"
         "/broadcast &lt;msg&gt; — message every user\n"
         "/push &lt;segment&gt; &lt;msg&gt; — message a segment (opted-in)\n"
+        "/promonew &lt;code&gt; &lt;pct|fixed&gt; &lt;value&gt; [plan] [max] [days] — new code\n"
+        "/promos — list discount codes\n"
+        "/promooff &lt;code&gt; — deactivate a code\n"
         "/feedback — view recent client feedback\n"
         "/export — download customers CSV\n"
         "/reply &lt;id&gt; &lt;msg&gt; — answer a support handoff\n"
@@ -320,6 +334,126 @@ async def export_cmd(message: Message) -> None:
                     earnings.get(u.id, 0)])
     doc = BufferedInputFile(buf.getvalue().encode(), filename=f"customers-{now:%Y%m%d}.csv")
     await message.answer_document(doc, caption=f"📑 {len(users)} customer(s) exported.")
+
+
+_PROMO_NEW_USAGE = (
+    "Usage: /promonew &lt;code&gt; &lt;pct|fixed&gt; &lt;value&gt; "
+    "[plan|*] [max|*] [days|*]\n"
+    "e.g. <code>/promonew SAVE20 pct 20</code> — 20% off any plan, no limit\n"
+    "e.g. <code>/promonew WELCOME10 fixed 10 monthly 100 30</code> — $10 off "
+    "monthly, 100 uses, expires in 30 days"
+)
+
+
+@router.message(Command("promonew"))
+async def promonew_cmd(message: Message, command: CommandObject) -> None:
+    """Create a discount code. Value is a percent (pct) or a fixed amount (fixed)."""
+    parts = (command.args or "").split()
+    if len(parts) < 3:
+        await message.answer(_PROMO_NEW_USAGE, parse_mode="HTML")
+        return
+    code, type_raw, value_raw = parts[0], parts[1].lower(), parts[2]
+    if type_raw in ("pct", "percent", "%"):
+        discount_type = DISCOUNT_PERCENT
+    elif type_raw in ("fixed", "amount", "flat"):
+        discount_type = DISCOUNT_FIXED
+    else:
+        await message.answer(_PROMO_NEW_USAGE, parse_mode="HTML")
+        return
+    try:
+        value = Decimal(value_raw)
+    except (InvalidOperation, ValueError):
+        await message.answer("Value must be a number (e.g. 20 or 9.99).")
+        return
+    if value <= 0 or (discount_type == DISCOUNT_PERCENT and value > 100):
+        await message.answer("Percent must be 1–100; a fixed amount must be positive.")
+        return
+
+    plan_arg = parts[3] if len(parts) > 3 else "*"
+    max_arg = parts[4] if len(parts) > 4 else "*"
+    days_arg = parts[5] if len(parts) > 5 else "*"
+
+    max_redemptions = None
+    if max_arg != "*":
+        if not max_arg.isdigit() or int(max_arg) <= 0:
+            await message.answer("max must be a positive number or *.")
+            return
+        max_redemptions = int(max_arg)
+    expires_at = None
+    if days_arg != "*":
+        if not days_arg.isdigit() or int(days_arg) <= 0:
+            await message.answer("days must be a positive number or *.")
+            return
+        expires_at = datetime.now(UTC) + timedelta(days=int(days_arg))
+
+    async with SessionFactory() as db:
+        if await promos.get(db, code) is not None:
+            await message.answer(f"A code '{promos.normalize(code)}' already exists.")
+            return
+        plan_id = None
+        if plan_arg != "*":
+            plan = await db.scalar(select(Plan).where(Plan.name == plan_arg.lower()))
+            if plan is None:
+                await message.answer(f"Unknown plan '{plan_arg}'.")
+                return
+            plan_id = plan.id
+        promo = await promos.create(
+            db, code=code, discount_type=discount_type, discount_value=value,
+            plan_id=plan_id, max_redemptions=max_redemptions, expires_at=expires_at,
+            actor=f"admin:{message.from_user.id}",
+        )
+        await db.commit()
+        desc = promos.describe(promo)
+    scope = plan_arg.lower() if plan_arg != "*" else "any plan"
+    cap = f"{max_redemptions} uses" if max_redemptions else "unlimited"
+    exp = f"expires {expires_at:%Y-%m-%d}" if expires_at else "no expiry"
+    await message.answer(
+        f"✅ Created <b>{promo.code}</b> — {desc}, {scope}, {cap}, {exp}.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(Command("promos"))
+async def promos_cmd(message: Message) -> None:
+    """/promos — list discount codes with their redemption counts."""
+    async with SessionFactory() as db:
+        rows = await promos.list_all(db)
+    if not rows:
+        await message.answer("No promo codes yet. Create one with /promonew.")
+        return
+    lines = ["<b>🏷 Promo codes</b>"]
+    for promo, plan_name in rows:
+        desc = promos.describe(promo)
+        used = f"{promo.times_redeemed}"
+        if promo.max_redemptions is not None:
+            used += f"/{promo.max_redemptions}"
+        flags = []
+        if not promo.is_active:
+            flags.append("off")
+        if promo.expires_at is not None:
+            expired = promo.expires_at <= datetime.now(UTC)
+            flags.append("expired" if expired else f"till {promo.expires_at:%Y-%m-%d}")
+        scope = plan_name or "any"
+        tail = f" [{', '.join(flags)}]" if flags else ""
+        lines.append(
+            f"• <code>{promo.code}</code> — {desc} · {scope} · used {used}{tail}")
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+@router.message(Command("promooff"))
+async def promooff_cmd(message: Message, command: CommandObject) -> None:
+    """/promooff <code> — deactivate a discount code."""
+    code = (command.args or "").strip()
+    if not code:
+        await message.answer("Usage: /promooff &lt;code&gt;", parse_mode="HTML")
+        return
+    async with SessionFactory() as db:
+        ok = await promos.deactivate(db, code=code, actor=f"admin:{message.from_user.id}")
+        await db.commit()
+    if ok:
+        await message.answer(f"🚫 Deactivated <b>{promos.normalize(code)}</b>.", parse_mode="HTML")
+    else:
+        await message.answer(f"No code '{promos.normalize(code)}' found.")
 
 
 @router.message(Command("grant"))
