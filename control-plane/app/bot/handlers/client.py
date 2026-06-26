@@ -117,6 +117,16 @@ async def _escalate(reply_to: Message, user, last_text: str, lang: str) -> None:
     await reply_to.answer(i18n.t(lang, "human_connecting"))
 
 
+async def _return_to_ai(telegram_id: int) -> None:
+    """Leave operator-relay mode if active.
+
+    Engaging the self-service Help section is an explicit 'I want the assistant'
+    signal, so it always pulls the user out of any operator hand-off — otherwise
+    a stuck relay would forward Help questions to a human instead of the AI."""
+    if await handoff.is_active(telegram_id):
+        await handoff.exit(telegram_id)
+
+
 # ─── Reusable action views (called by slash commands AND menu buttons) ───────
 async def show_plans(message: Message, lang: str) -> None:
     async with SessionFactory() as db:
@@ -189,7 +199,9 @@ async def show_devices(message: Message, lang: str) -> None:
 
 
 async def show_help(message: Message, lang: str) -> None:
-    """Support hub: FAQ topic buttons + talk-to-a-person + ✍️ ask-your-own."""
+    """Support hub: FAQ topic buttons + ✍️ ask-your-own. Opening Help returns the
+    user to the AI (drops any operator relay) — no operator is pinged here."""
+    await _return_to_ai(message.from_user.id)
     await message.answer(i18n.t(lang, "help_intro"), parse_mode="HTML",
                          reply_markup=help_keyboard(lang))
 
@@ -418,6 +430,7 @@ async def faq_callback(cb: CallbackQuery) -> None:
     if question is None:
         await cb.answer()
         return
+    await _return_to_ai(cb.from_user.id)
     if not support.is_enabled():
         # Graceful fallback so a topic tap still answers when the AI is off.
         await cb.message.answer(i18n.t(lang, _FAQ_ANSWERS[topic]), parse_mode="HTML")
@@ -435,6 +448,8 @@ async def faq_callback(cb: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "help:other")
 async def help_other_callback(cb: CallbackQuery) -> None:
+    # Choosing to ask your own question is self-service → back to the AI.
+    await _return_to_ai(cb.from_user.id)
     await cb.message.answer(
         i18n.t(await _user_lang(cb.from_user.id), "help_other_prompt"), parse_mode="HTML")
     await cb.answer()
