@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -23,6 +23,12 @@ class User(Base):
 
     # Preferred conversation language (ISO-ish code: en/ru/uk/es/fr).
     language: Mapped[str] = mapped_column(String(8), default="en", server_default="en", nullable=False)
+
+    # Opt-out of marketing pushes (drip / digest / announcements). Transactional
+    # messages (payment confirmed, expiry reminders, support) are always sent.
+    notifications_opt_out: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
     # Self-referential: who invited this user (nullable).
     referred_by: Mapped[int | None] = mapped_column(

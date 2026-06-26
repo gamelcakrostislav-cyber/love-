@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     winback_enabled: bool = True
     winback_days: int = 3
 
+    # Client push / automation — onboarding drip + weekly digest (respect opt-out).
+    onboarding_drip_enabled: bool = True
+    onboarding_drip_days: str = "1,3"   # nudge non-subscribers at these days-since-signup
+    weekly_digest_enabled: bool = True
+    notifications_minutes: int = 60     # worker sweep cadence for drip/digest
+
     # AI support agent — any OpenAI-compatible provider (default: free Groq)
     support_ai_enabled: bool = True
     support_provider: str = "groq"

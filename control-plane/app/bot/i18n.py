@@ -140,6 +140,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "human_connecting": "🧑‍💼 Connecting you to a person — someone will reply here shortly. Anything you send now goes straight to our team.",
         "sent_to_team": "✅ Sent to our team.",
         "no_account": "No account yet. Send /start.",
+        "drip_nudge": "👋 Still deciding? Start <b>free</b> with the 7-day trial — see real arbitrage opportunities with no risk. Tap 📋 Plans whenever you're ready.",
+        "digest": "📊 <b>Your weekly summary</b>\nPlan: <b>{plan}</b> · {days} days left\nReferral earnings: <b>{earned}</b>\n\nKeep it up! Invite friends with 🎁 Referrals to earn more.",
+        "muted": "🔕 You'll no longer get promotional messages. Important ones (payments, expiry) still come through. Send /unmute to turn them back on.",
+        "unmuted": "🔔 Promotional messages are back on. Send /mute to stop them anytime.",
     },
     "ru": {
         "choose_language": "🌐 Пожалуйста, выберите язык:",
@@ -210,6 +214,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "human_connecting": "🧑‍💼 Соединяю с человеком — скоро ответят здесь. Всё, что вы напишете сейчас, уйдёт нашей команде.",
         "sent_to_team": "✅ Отправлено нашей команде.",
         "no_account": "Аккаунта пока нет. Отправьте /start.",
+        "drip_nudge": "👋 Ещё думаете? Начните <b>бесплатно</b> с 7-дневного пробного периода — посмотрите реальные арбитражные возможности без риска. Нажмите 📋 Тарифы, когда будете готовы.",
+        "digest": "📊 <b>Ваша сводка за неделю</b>\nПлан: <b>{plan}</b> · осталось дней: {days}\nДоход с рефералов: <b>{earned}</b>\n\nТак держать! Приглашайте друзей через 🎁 Рефералы, чтобы зарабатывать больше.",
+        "muted": "🔕 Вы больше не будете получать рекламные сообщения. Важные (оплата, окончание срока) приходят по-прежнему. Отправьте /unmute, чтобы включить обратно.",
+        "unmuted": "🔔 Рекламные сообщения снова включены. Отправьте /mute, чтобы отключить в любой момент.",
     },
     "uk": {
         "choose_language": "🌐 Будь ласка, оберіть мову:",
@@ -280,6 +288,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "human_connecting": "🧑‍💼 З'єдную з людиною — скоро дадуть відповідь тут. Усе, що ви напишете зараз, піде нашій команді.",
         "sent_to_team": "✅ Надіслано нашій команді.",
         "no_account": "Облікового запису поки немає. Надішліть /start.",
+        "drip_nudge": "👋 Ще вагаєтесь? Почніть <b>безкоштовно</b> з 7-денного пробного періоду — перегляньте реальні арбітражні можливості без ризику. Натисніть 📋 Тарифи, коли будете готові.",
+        "digest": "📊 <b>Ваш тижневий підсумок</b>\nПлан: <b>{plan}</b> · залишилось днів: {days}\nДохід з рефералів: <b>{earned}</b>\n\nТак тримати! Запрошуйте друзів через 🎁 Реферали, щоб заробляти більше.",
+        "muted": "🔕 Ви більше не отримуватимете рекламні повідомлення. Важливі (оплата, завершення терміну) надходять як завжди. Надішліть /unmute, щоб увімкнути знову.",
+        "unmuted": "🔔 Рекламні повідомлення знову увімкнено. Надішліть /mute, щоб вимкнути будь-коли.",
     },
     "es": {
         "choose_language": "🌐 Por favor, elige tu idioma:",
@@ -350,6 +362,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "human_connecting": "🧑‍💼 Te conecto con una persona — alguien responderá aquí pronto. Lo que escribas ahora va directo a nuestro equipo.",
         "sent_to_team": "✅ Enviado a nuestro equipo.",
         "no_account": "Aún no hay cuenta. Envía /start.",
+        "drip_nudge": "👋 ¿Aún lo piensas? Empieza <b>gratis</b> con la prueba de 7 días — mira oportunidades reales de arbitraje sin riesgo. Pulsa 📋 Planes cuando quieras.",
+        "digest": "📊 <b>Tu resumen semanal</b>\nPlan: <b>{plan}</b> · quedan {days} días\nGanancias por referidos: <b>{earned}</b>\n\n¡Sigue así! Invita amigos con 🎁 Referidos para ganar más.",
+        "muted": "🔕 Ya no recibirás mensajes promocionales. Los importantes (pagos, vencimiento) siguen llegando. Envía /unmute para reactivarlos.",
+        "unmuted": "🔔 Mensajes promocionales reactivados. Envía /mute para detenerlos cuando quieras.",
     },
     "fr": {
         "choose_language": "🌐 Veuillez choisir votre langue :",
@@ -420,6 +436,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "human_connecting": "🧑‍💼 Je vous mets en relation avec une personne — réponse ici sous peu. Tout ce que vous écrivez maintenant va directement à notre équipe.",
         "sent_to_team": "✅ Envoyé à notre équipe.",
         "no_account": "Pas encore de compte. Envoyez /start.",
+        "drip_nudge": "👋 Vous hésitez encore ? Commencez <b>gratuitement</b> avec l'essai de 7 jours — voyez de vraies opportunités d'arbitrage sans risque. Appuyez sur 📋 Forfaits quand vous voulez.",
+        "digest": "📊 <b>Votre résumé hebdomadaire</b>\nForfait : <b>{plan}</b> · {days} jours restants\nGains de parrainage : <b>{earned}</b>\n\nContinuez ! Invitez des amis via 🎁 Parrainage pour gagner plus.",
+        "muted": "🔕 Vous ne recevrez plus de messages promotionnels. Les importants (paiements, expiration) arrivent toujours. Envoyez /unmute pour les réactiver.",
+        "unmuted": "🔔 Messages promotionnels réactivés. Envoyez /mute pour les arrêter à tout moment.",
     },
 }
 

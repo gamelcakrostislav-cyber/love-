@@ -15,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
-from app.services import alerts, notion_sync, reminders, revocation
+from app.services import alerts, notifications, notion_sync, reminders, revocation
 
 log = get_logger("worker")
 
@@ -48,6 +48,17 @@ async def alert_tick() -> None:
             log.info("admin alerts: %d abuse events", n)
     except Exception as exc:  # noqa: BLE001 - alerts must never crash the worker
         log.warning("alert sweep failed: %s", exc)
+
+
+async def notifications_tick() -> None:
+    try:
+        async with SessionFactory() as db:
+            drip = await notifications.drip_sweep(db)
+            digest = await notifications.digest_sweep(db)
+        if drip or digest:
+            log.info("notifications: %d drip, %d digest", drip, digest)
+    except Exception as exc:  # noqa: BLE001 - notifications must never crash the worker
+        log.warning("notifications sweep failed: %s", exc)
 
 
 async def notion_tick() -> None:
@@ -86,6 +97,14 @@ async def main() -> None:
             coalesce=True,
         )
         log.info("reminders enabled — sweep every %d min", settings.expiry_reminder_minutes)
+
+    if notifications.drip_enabled() or notifications.digest_enabled():
+        scheduler.add_job(
+            notifications_tick, trigger="interval",
+            minutes=max(15, settings.notifications_minutes),
+            next_run_time=datetime.now(UTC), max_instances=1, coalesce=True,
+        )
+        log.info("client notifications enabled — drip + weekly digest")
 
     if alerts.is_enabled():
         scheduler.add_job(

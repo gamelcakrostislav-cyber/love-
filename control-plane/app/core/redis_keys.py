@@ -66,3 +66,13 @@ def winback(user_id: int) -> str:
 def abuse_alert_watermark() -> str:
     """Highest AbuseEvent id already alerted to admins (so we only alert new ones)."""
     return "abuse:alert:watermark"
+
+
+def drip(user_id: int, day: int) -> str:
+    """Marker that the day-<day> onboarding nudge was sent to a user."""
+    return f"drip:{user_id}:{day}"
+
+
+def digest(user_id: int) -> str:
+    """Marker (7-day TTL) that this user already got their weekly digest."""
+    return f"digest:{user_id}"

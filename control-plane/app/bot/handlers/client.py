@@ -292,6 +292,26 @@ async def referrals_cmd(message: Message) -> None:
     await show_referrals(message, await _user_lang(message.from_user.id))
 
 
+async def _set_opt_out(message: Message, value: bool, key: str) -> None:
+    async with SessionFactory() as db:
+        user, _ = await users.get_or_create(
+            db, telegram_id=message.from_user.id, username=message.from_user.username)
+        user.notifications_opt_out = value
+        lang = i18n.normalize(user.language)
+        await db.commit()
+    await message.answer(i18n.t(lang, key), parse_mode="HTML")
+
+
+@router.message(Command("mute"))
+async def mute_cmd(message: Message) -> None:
+    await _set_opt_out(message, True, "muted")
+
+
+@router.message(Command("unmute"))
+async def unmute_cmd(message: Message) -> None:
+    await _set_opt_out(message, False, "unmuted")
+
+
 @router.message(Command("human"))
 async def human_cmd(message: Message) -> None:
     await _human_flow(message)

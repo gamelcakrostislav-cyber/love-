@@ -83,3 +83,10 @@ def test_renew_and_winback_strings_in_every_language():
         assert "{" not in i18n.t(lang, "renew_button", plan="monthly")
         out = i18n.t(lang, "winback", plan="monthly", days=3)
         assert "{" not in out and "}" not in out
+
+
+def test_drip_digest_mute_strings_in_every_language():
+    for lang in i18n.LANGUAGES:
+        assert i18n.t(lang, "drip_nudge") and i18n.t(lang, "muted") and i18n.t(lang, "unmuted")
+        digest = i18n.t(lang, "digest", plan="monthly", days=30, earned="9.80 USD")
+        assert "{" not in digest and "}" not in digest

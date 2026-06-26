@@ -184,6 +184,7 @@ Client commands (aiogram 3.x long-polling):
 | `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
 | `/devices` | list registered devices; remove one to free a slot |
 | `/referrals` | your invite link + stats (invited / paid / earned) and your rate |
+| `/mute` · `/unmute` | opt out of / back into promotional pushes (transactional DMs always send) |
 | `/human` | hand off to a human (admins); free text otherwise goes to the AI agent |
 | `/help` | command list |
 
@@ -230,8 +231,18 @@ within the entitlement cache window.
 
 It also sends **expiry reminders**: every `EXPIRY_REMINDER_MINUTES` it DMs users
 whose subscription falls into a days-left band (`EXPIRY_REMINDER_DAYS=3,1`),
-localized, with a renew nudge — deduped per band via a Redis marker so nobody is
-spammed. (Plus the Notion reconcile job when enabled.)
+localized, with a one-tap renew button — deduped per band via a Redis marker so
+nobody is spammed.
+
+**Client push & automation** (all respect each user's `/mute` opt-out):
+- **Onboarding drip** — nudges not-yet-subscribed users at `ONBOARDING_DRIP_DAYS`
+  (default `1,3`) since signup.
+- **Win-back** — DMs lapsed users `WINBACK_DAYS` after they expire.
+- **Weekly digest** — a summary DM to active subscribers (plan, days left, referral
+  earnings), once per 7 days.
+- **Admin** — `/push <all|active|trial|inactive> <msg>` targets a segment;
+  `/broadcast` reaches everyone (transactional). Admins also get auto **abuse
+  alerts**. (Plus the Notion reconcile job when enabled.)
 
 ## Notion sync (advanced database / CRM)
 

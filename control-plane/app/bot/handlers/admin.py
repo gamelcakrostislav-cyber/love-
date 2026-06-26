@@ -30,7 +30,7 @@ from app.models.session import Session
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services import activation, devices as devices_svc
-from app.services import handoff, keys, notion_sync, revocation, subscriptions, users
+from app.services import handoff, keys, notifications, notion_sync, revocation, subscriptions, users
 from app.services.audit import record_audit
 from app.bot import notify
 
@@ -217,6 +217,7 @@ async def admin_help_cmd(message: Message) -> None:
         "/unflag &lt;prefix|id&gt; — clear a flag\n"
         "/notion [sync] — Notion CRM status / sync now\n"
         "/broadcast &lt;msg&gt; — message every user\n"
+        "/push &lt;segment&gt; &lt;msg&gt; — message a segment (opted-in)\n"
         "/export — download customers CSV\n"
         "/reply &lt;id&gt; &lt;msg&gt; — answer a support handoff\n"
         "/close &lt;id&gt; — end a support handoff",
@@ -243,6 +244,31 @@ async def broadcast_cmd(message: Message, command: CommandObject) -> None:
             failed += 1
         await asyncio.sleep(0.05)  # stay well under Telegram's ~30 msg/s limit
     await message.answer(f"📣 Broadcast done — {sent} sent, {failed} failed.")
+
+
+@router.message(Command("push"))
+async def push_cmd(message: Message, command: CommandObject) -> None:
+    """/push <all|active|trial|inactive> <message> — DM a segment (opted-in only)."""
+    parts = (command.args or "").split(maxsplit=1)
+    if len(parts) < 2 or parts[0].lower() not in notifications.SEGMENTS:
+        await message.answer(
+            "Usage: /push &lt;all|active|trial|inactive&gt; &lt;message&gt;\n"
+            "(only reaches users who haven't opted out — use /broadcast for everyone)",
+            parse_mode="HTML")
+        return
+    segment, text = parts[0].lower(), parts[1]
+    async with SessionFactory() as db:
+        ids = await notifications.segment_telegram_ids(db, segment)
+    await message.answer(f"🔔 Pushing to {len(ids)} '{segment}' user(s)…")
+    sent = failed = 0
+    for tid in ids:
+        try:
+            await message.bot.send_message(tid, text)
+            sent += 1
+        except Exception:  # noqa: BLE001
+            failed += 1
+        await asyncio.sleep(0.05)
+    await message.answer(f"🔔 Push done — {sent} sent, {failed} failed.")
 
 
 @router.message(Command("export"))
