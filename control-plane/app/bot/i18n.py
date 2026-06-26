@@ -29,11 +29,14 @@ _MENU: dict[str, dict[str, str]] = {
     "key":      {"en": "🔑 Key", "ru": "🔑 Ключ", "uk": "🔑 Ключ", "es": "🔑 Clave", "fr": "🔑 Clé"},
     "devices":  {"en": "📱 Devices", "ru": "📱 Устройства", "uk": "📱 Пристрої", "es": "📱 Dispositivos", "fr": "📱 Appareils"},
     "referrals": {"en": "🎁 Referrals", "ru": "🎁 Рефералы", "uk": "🎁 Реферали", "es": "🎁 Referidos", "fr": "🎁 Parrainage"},
-    "human":    {"en": "🆘 Human", "ru": "🆘 Оператор", "uk": "🆘 Оператор", "es": "🆘 Persona", "fr": "🆘 Humain"},
-    "language": {"en": "🌐 Language", "ru": "🌐 Язык", "uk": "🌐 Мова", "es": "🌐 Idioma", "fr": "🌐 Langue"},
     "help":     {"en": "❓ Help", "ru": "❓ Помощь", "uk": "❓ Допомога", "es": "❓ Ayuda", "fr": "❓ Aide"},
+    "feedback": {"en": "💬 Feedback", "ru": "💬 Отзыв", "uk": "💬 Відгук", "es": "💬 Sugerencias", "fr": "💬 Avis"},
+    "language": {"en": "🌐 Language", "ru": "🌐 Язык", "uk": "🌐 Мова", "es": "🌐 Idioma", "fr": "🌐 Langue"},
+    # 'human' is no longer a menu button — reaching an operator is an explicit
+    # choice inside Help. The label is kept for the in-Help button text.
+    "human":    {"en": "🆘 Human", "ru": "🆘 Оператор", "uk": "🆘 Оператор", "es": "🆘 Persona", "fr": "🆘 Humain"},
 }
-MENU_ORDER = ["plans", "status", "key", "devices", "referrals", "human", "language", "help"]
+MENU_ORDER = ["plans", "status", "key", "devices", "referrals", "help", "feedback", "language"]
 
 _LABEL_TO_ACTION = {label: action for action, m in _MENU.items() for label in m.values()}
 
@@ -48,11 +51,11 @@ COMMANDS: dict[str, dict[str, str]] = {
     "key":      {"en": "Show / reissue API key", "ru": "Показать / перевыпустить ключ", "uk": "Показати / перевипустити ключ", "es": "Ver / reemitir clave API", "fr": "Afficher / réémettre la clé API"},
     "devices":  {"en": "Manage your devices", "ru": "Управление устройствами", "uk": "Керування пристроями", "es": "Gestionar dispositivos", "fr": "Gérer vos appareils"},
     "referrals": {"en": "Your invite link & earnings", "ru": "Ваша ссылка и доход", "uk": "Ваше посилання та дохід", "es": "Tu enlace y ganancias", "fr": "Votre lien et vos gains"},
-    "human":    {"en": "Talk to a real person", "ru": "Связаться с человеком", "uk": "Зв'язатися з людиною", "es": "Hablar con una persona", "fr": "Parler à une personne"},
+    "help":     {"en": "Help & support", "ru": "Помощь и поддержка", "uk": "Допомога та підтримка", "es": "Ayuda y soporte", "fr": "Aide et support"},
+    "feedback": {"en": "Send feedback / ideas", "ru": "Оставить отзыв / идеи", "uk": "Залишити відгук / ідеї", "es": "Enviar sugerencias / ideas", "fr": "Envoyer un avis / des idées"},
     "language": {"en": "Change language", "ru": "Сменить язык", "uk": "Змінити мову", "es": "Cambiar idioma", "fr": "Changer de langue"},
-    "help":     {"en": "How the bot works", "ru": "Как работает бот", "uk": "Як працює бот", "es": "Cómo funciona el bot", "fr": "Comment le bot fonctionne"},
 }
-COMMAND_ORDER = ["start", "plans", "status", "key", "devices", "referrals", "human", "language", "help"]
+COMMAND_ORDER = ["start", "plans", "status", "key", "devices", "referrals", "help", "feedback", "language"]
 
 
 def command_description(command: str, lang: str) -> str:
@@ -152,6 +155,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "leaderboard_you": "\n— — —\n🫵 <b>You</b>: #{rank} · {earned} · {count} paid",
         "leaderboard_empty": "No paid referrals yet — be the first! Tap 🎁 Referrals to get your link.",
         "milestone": "🎉 <b>Milestone reached!</b> You've brought in <b>{count}</b> paying customer(s). Keep sharing your link to earn more! 🚀",
+        "help_intro": "❓ <b>Help &amp; support</b>\nPick a topic below, or tap ✍️ to ask your own question.",
+        "faq_pay": "💳 How do I pay?",
+        "faq_pay_a": "Tap 📋 <b>Plans</b>, choose a plan, and pay in crypto via @CryptoBot — your subscription activates automatically once paid. The 7-day trial is free!",
+        "faq_key": "🔑 My API key",
+        "faq_key_a": "After subscribing, tap 🔑 <b>Key</b> to reveal your API key (shown once) and paste it into the product. Lost it? Tap 🔑 Key → reissue to get a new one.",
+        "faq_device": "📱 Device blocked?",
+        "faq_device_a": "Adding a new device beyond your plan's limit triggers a 24h cooldown — that's anti-fraud protection, not a ban. Manage your devices with 📱 <b>Devices</b>.",
+        "help_human_btn": "🗣 Talk to a person",
+        "help_other_btn": "✍️ Ask my own question",
+        "help_other_prompt": "💬 Go ahead — type your question and our assistant will help.",
+        "feedback_prompt": "💬 <b>We'd love your ideas!</b> What should we add or improve? Type your suggestion below and it goes straight to our team.",
+        "feedback_thanks": "✅ Thank you! Your feedback was sent to our team. 🙏",
     },
     "ru": {
         "choose_language": "🌐 Пожалуйста, выберите язык:",
@@ -234,6 +249,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "leaderboard_you": "\n— — —\n🫵 <b>Вы</b>: #{rank} · {earned} · оплатили: {count}",
         "leaderboard_empty": "Пока нет оплаченных рефералов — станьте первым! Нажмите 🎁 Рефералы за ссылкой.",
         "milestone": "🎉 <b>Достижение!</b> Вы привели <b>{count}</b> платящих клиентов. Делитесь ссылкой, чтобы зарабатывать больше! 🚀",
+        "help_intro": "❓ <b>Помощь и поддержка</b>\nВыберите тему ниже или нажмите ✍️, чтобы задать свой вопрос.",
+        "faq_pay": "💳 Как оплатить?",
+        "faq_pay_a": "Нажмите 📋 <b>Тарифы</b>, выберите план и оплатите в крипте через @CryptoBot — подписка активируется автоматически после оплаты. 7-дневный пробный период бесплатный!",
+        "faq_key": "🔑 Мой API-ключ",
+        "faq_key_a": "После оформления подписки нажмите 🔑 <b>Ключ</b>, чтобы увидеть API-ключ (показывается один раз), и вставьте его в продукт. Потеряли? Нажмите 🔑 Ключ → перевыпустить.",
+        "faq_device": "📱 Устройство заблокировано?",
+        "faq_device_a": "Добавление нового устройства сверх лимита плана включает 24-часовую задержку — это защита от мошенничества, а не бан. Управляйте устройствами через 📱 <b>Устройства</b>.",
+        "help_human_btn": "🗣 Связаться с человеком",
+        "help_other_btn": "✍️ Задать свой вопрос",
+        "help_other_prompt": "💬 Пишите — задайте вопрос текстом, и ассистент поможет.",
+        "feedback_prompt": "💬 <b>Нам важны ваши идеи!</b> Что добавить или улучшить? Напишите предложение ниже — оно сразу уйдёт нашей команде.",
+        "feedback_thanks": "✅ Спасибо! Ваш отзыв отправлен нашей команде. 🙏",
     },
     "uk": {
         "choose_language": "🌐 Будь ласка, оберіть мову:",
@@ -316,6 +343,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "leaderboard_you": "\n— — —\n🫵 <b>Ви</b>: #{rank} · {earned} · оплатили: {count}",
         "leaderboard_empty": "Поки немає оплачених рефералів — станьте першим! Натисніть 🎁 Реферали за посиланням.",
         "milestone": "🎉 <b>Досягнення!</b> Ви привели <b>{count}</b> платних клієнтів. Діліться посиланням, щоб заробляти більше! 🚀",
+        "help_intro": "❓ <b>Допомога та підтримка</b>\nОберіть тему нижче або натисніть ✍️, щоб поставити своє запитання.",
+        "faq_pay": "💳 Як оплатити?",
+        "faq_pay_a": "Натисніть 📋 <b>Тарифи</b>, оберіть план і сплатіть у крипті через @CryptoBot — підписка активується автоматично після оплати. 7-денний пробний період безкоштовний!",
+        "faq_key": "🔑 Мій API-ключ",
+        "faq_key_a": "Після оформлення підписки натисніть 🔑 <b>Ключ</b>, щоб побачити API-ключ (показується один раз), і вставте його в продукт. Втратили? Натисніть 🔑 Ключ → перевипустити.",
+        "faq_device": "📱 Пристрій заблоковано?",
+        "faq_device_a": "Додавання нового пристрою понад ліміт плану вмикає 24-годинну затримку — це захист від шахрайства, а не бан. Керуйте пристроями через 📱 <b>Пристрої</b>.",
+        "help_human_btn": "🗣 Зв'язатися з людиною",
+        "help_other_btn": "✍️ Поставити своє запитання",
+        "help_other_prompt": "💬 Пишіть — поставте запитання текстом, і асистент допоможе.",
+        "feedback_prompt": "💬 <b>Нам важливі ваші ідеї!</b> Що додати чи покращити? Напишіть пропозицію нижче — вона одразу піде нашій команді.",
+        "feedback_thanks": "✅ Дякуємо! Ваш відгук надіслано нашій команді. 🙏",
     },
     "es": {
         "choose_language": "🌐 Por favor, elige tu idioma:",
@@ -398,6 +437,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "leaderboard_you": "\n— — —\n🫵 <b>Tú</b>: #{rank} · {earned} · {count} pagados",
         "leaderboard_empty": "Aún no hay referidos pagados — ¡sé el primero! Pulsa 🎁 Referidos para tu enlace.",
         "milestone": "🎉 <b>¡Logro alcanzado!</b> Has traído <b>{count}</b> cliente(s) de pago. ¡Sigue compartiendo tu enlace para ganar más! 🚀",
+        "help_intro": "❓ <b>Ayuda y soporte</b>\nElige un tema abajo, o pulsa ✍️ para hacer tu propia pregunta.",
+        "faq_pay": "💳 ¿Cómo pago?",
+        "faq_pay_a": "Pulsa 📋 <b>Planes</b>, elige un plan y paga en cripto vía @CryptoBot — tu suscripción se activa automáticamente tras el pago. ¡La prueba de 7 días es gratis!",
+        "faq_key": "🔑 Mi clave API",
+        "faq_key_a": "Tras suscribirte, pulsa 🔑 <b>Clave</b> para ver tu clave API (se muestra una vez) y pégala en el producto. ¿La perdiste? Pulsa 🔑 Clave → reemitir.",
+        "faq_device": "📱 ¿Dispositivo bloqueado?",
+        "faq_device_a": "Añadir un dispositivo más allá del límite de tu plan activa un periodo de 24h — es protección antifraude, no un bloqueo. Gestiona tus dispositivos con 📱 <b>Dispositivos</b>.",
+        "help_human_btn": "🗣 Hablar con una persona",
+        "help_other_btn": "✍️ Hacer mi propia pregunta",
+        "help_other_prompt": "💬 Adelante — escribe tu pregunta y el asistente te ayudará.",
+        "feedback_prompt": "💬 <b>¡Nos encantan tus ideas!</b> ¿Qué deberíamos añadir o mejorar? Escribe tu sugerencia abajo y llega directo a nuestro equipo.",
+        "feedback_thanks": "✅ ¡Gracias! Tu sugerencia se envió a nuestro equipo. 🙏",
     },
     "fr": {
         "choose_language": "🌐 Veuillez choisir votre langue :",
@@ -480,6 +531,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "leaderboard_you": "\n— — —\n🫵 <b>Vous</b> : #{rank} · {earned} · {count} payés",
         "leaderboard_empty": "Aucun parrainage payé pour l'instant — soyez le premier ! Appuyez sur 🎁 Parrainage pour votre lien.",
         "milestone": "🎉 <b>Palier atteint !</b> Vous avez amené <b>{count}</b> client(s) payant(s). Continuez à partager votre lien pour gagner plus ! 🚀",
+        "help_intro": "❓ <b>Aide et support</b>\nChoisissez un sujet ci-dessous, ou appuyez sur ✍️ pour poser votre propre question.",
+        "faq_pay": "💳 Comment payer ?",
+        "faq_pay_a": "Appuyez sur 📋 <b>Forfaits</b>, choisissez un forfait et payez en crypto via @CryptoBot — votre abonnement s'active automatiquement après le paiement. L'essai de 7 jours est gratuit !",
+        "faq_key": "🔑 Ma clé API",
+        "faq_key_a": "Après l'abonnement, appuyez sur 🔑 <b>Clé</b> pour afficher votre clé API (montrée une fois) et collez-la dans le produit. Perdue ? Appuyez sur 🔑 Clé → réémettre.",
+        "faq_device": "📱 Appareil bloqué ?",
+        "faq_device_a": "Ajouter un nouvel appareil au-delà de la limite de votre forfait déclenche un délai de 24h — c'est une protection anti-fraude, pas un blocage. Gérez vos appareils via 📱 <b>Appareils</b>.",
+        "help_human_btn": "🗣 Parler à une personne",
+        "help_other_btn": "✍️ Poser ma propre question",
+        "help_other_prompt": "💬 Allez-y — écrivez votre question et l'assistant vous aidera.",
+        "feedback_prompt": "💬 <b>Vos idées nous intéressent !</b> Que devrions-nous ajouter ou améliorer ? Écrivez votre suggestion ci-dessous, elle ira directement à notre équipe.",
+        "feedback_thanks": "✅ Merci ! Votre avis a été envoyé à notre équipe. 🙏",
     },
 }
 

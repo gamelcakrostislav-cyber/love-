@@ -81,3 +81,8 @@ def digest(user_id: int) -> str:
 def milestone(user_id: int) -> str:
     """Highest referral milestone already celebrated for a referrer."""
     return f"growth:milestone:{user_id}"
+
+
+def feedback_mode(telegram_id: int) -> str:
+    """Flag: the user's next message should be captured as feedback (short TTL)."""
+    return f"feedback:mode:{telegram_id}"

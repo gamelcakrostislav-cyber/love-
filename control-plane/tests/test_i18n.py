@@ -92,6 +92,17 @@ def test_drip_digest_mute_strings_in_every_language():
         assert "{" not in digest and "}" not in digest
 
 
+def test_support_hub_and_feedback_strings_in_every_language():
+    # Operator is no longer a top-level menu button; Help is the support hub.
+    assert "human" not in i18n.MENU_ORDER and "feedback" in i18n.MENU_ORDER
+    for lang in i18n.LANGUAGES:
+        assert i18n.button_action(i18n.menu_label("feedback", lang)) == "feedback"
+        for k in ("help_intro", "faq_pay", "faq_pay_a", "faq_key", "faq_key_a",
+                  "faq_device", "faq_device_a", "help_human_btn", "help_other_btn",
+                  "help_other_prompt", "feedback_prompt", "feedback_thanks"):
+            assert i18n.t(lang, k)
+
+
 def test_growth_strings_in_every_language():
     for lang in i18n.LANGUAGES:
         for k in ("referrals_share", "referrals_share_text", "leaderboard_btn",

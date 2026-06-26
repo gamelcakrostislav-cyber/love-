@@ -5,6 +5,7 @@ from app.models.abuse_event import AbuseEvent
 from app.models.api_key import ApiKey
 from app.models.audit_log import AuditLog
 from app.models.device import Device
+from app.models.feedback import Feedback
 from app.models.notion_sync import NotionSync
 from app.models.payment import Payment
 from app.models.plan import Plan
@@ -19,6 +20,7 @@ __all__ = [
     "ApiKey",
     "AuditLog",
     "Device",
+    "Feedback",
     "NotionSync",
     "Payment",
     "Plan",

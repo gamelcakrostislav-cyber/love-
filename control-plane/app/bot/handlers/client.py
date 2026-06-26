@@ -25,14 +25,18 @@ from sqlalchemy import func, select
 from app.bot import i18n
 from app.bot.keyboards import (
     devices_keyboard,
+    help_keyboard,
     language_keyboard,
     main_menu_keyboard,
     plans_keyboard,
     reissue_confirm_keyboard,
 )
+from app.core import redis_keys
 from app.core.config import settings
 from app.core.db import SessionFactory
+from app.core.redis import redis_client
 from app.models.enums import ReferralStatus
+from app.models.feedback import Feedback
 from app.models.plan import Plan
 from app.models.referral import Commission, Referral
 from app.services import devices as devices_svc
@@ -68,10 +72,14 @@ async def _active_plans(db) -> list[Plan]:
     return list(result)
 
 
-async def _escalate(message: Message, user, last_text: str, lang: str) -> None:
-    """Put a user into human-handoff mode and ping the admins (admins read EN)."""
+async def _escalate(reply_to: Message, user, last_text: str, lang: str) -> None:
+    """Put a user into human-handoff mode and ping the admins (admins read EN).
+
+    `reply_to` is the Message to answer on (a user message, or a callback's
+    message), and `user` carries the real telegram_id/username — so this works
+    from both the menu and the in-Help 'Talk to a person' button."""
     await handoff.enter(user.telegram_id)
-    uname = f"@{message.from_user.username}" if message.from_user.username else "(no username)"
+    uname = f"@{user.username}" if user.username else "(no username)"
     await handoff.notify_admins(
         "🆘 <b>Support request</b>\n"
         f"From: {uname} (id <code>{user.telegram_id}</code>)\n"
@@ -79,7 +87,7 @@ async def _escalate(message: Message, user, last_text: str, lang: str) -> None:
         f"Reply with <code>/reply {user.telegram_id} your message</code>, "
         f"or <code>/close {user.telegram_id}</code> to end."
     )
-    await message.answer(i18n.t(lang, "human_connecting"))
+    await reply_to.answer(i18n.t(lang, "human_connecting"))
 
 
 # ─── Reusable action views (called by slash commands AND menu buttons) ───────
@@ -154,7 +162,15 @@ async def show_devices(message: Message, lang: str) -> None:
 
 
 async def show_help(message: Message, lang: str) -> None:
-    await message.answer(i18n.t(lang, "help"), parse_mode="HTML")
+    """Support hub: FAQ topic buttons + talk-to-a-person + ✍️ ask-your-own."""
+    await message.answer(i18n.t(lang, "help_intro"), parse_mode="HTML",
+                         reply_markup=help_keyboard(lang))
+
+
+async def show_feedback(message: Message, lang: str) -> None:
+    """Arm 'feedback mode' so the user's next message is captured as a suggestion."""
+    await redis_client.set(redis_keys.feedback_mode(message.from_user.id), "1", ex=3600)
+    await message.answer(i18n.t(lang, "feedback_prompt"), parse_mode="HTML")
 
 
 async def show_referrals(message: Message, lang: str) -> None:
@@ -352,6 +368,41 @@ async def leaderboard_callback(cb: CallbackQuery) -> None:
     await cb.answer()
 
 
+_FAQ_ANSWERS = {"pay": "faq_pay_a", "key": "faq_key_a", "device": "faq_device_a"}
+
+
+@router.callback_query(F.data.startswith("faq:"))
+async def faq_callback(cb: CallbackQuery) -> None:
+    key = _FAQ_ANSWERS.get(cb.data.split(":", 1)[1])
+    if key:
+        await cb.message.answer(i18n.t(await _user_lang(cb.from_user.id), key), parse_mode="HTML")
+    await cb.answer()
+
+
+@router.callback_query(F.data == "help:other")
+async def help_other_callback(cb: CallbackQuery) -> None:
+    await cb.message.answer(
+        i18n.t(await _user_lang(cb.from_user.id), "help_other_prompt"), parse_mode="HTML")
+    await cb.answer()
+
+
+@router.callback_query(F.data == "help:human")
+async def help_human_callback(cb: CallbackQuery) -> None:
+    """The only explicit path to an operator — chosen by the user inside Help."""
+    async with SessionFactory() as db:
+        user, _ = await users.get_or_create(
+            db, telegram_id=cb.from_user.id, username=cb.from_user.username)
+        lang = i18n.normalize(user.language)
+        await db.commit()
+    await _escalate(cb.message, user, "(used 🗣 Talk to a person)", lang)
+    await cb.answer()
+
+
+@router.message(Command("feedback"))
+async def feedback_cmd(message: Message) -> None:
+    await show_feedback(message, await _user_lang(message.from_user.id))
+
+
 @router.message(Command("mute"))
 async def mute_cmd(message: Message) -> None:
     await _set_opt_out(message, True, "muted")
@@ -491,8 +542,26 @@ async def support_or_relay(message: Message) -> None:
     if action == "help":
         await show_help(message, lang)
         return
+    if action == "feedback":
+        await show_feedback(message, lang)
+        return
     if action == "language":
         await open_language(message)
+        return
+
+    # 1b. Feedback capture: the 💬 Feedback button armed this — store the next
+    # message as a suggestion and forward it to the team.
+    if await redis_client.get(redis_keys.feedback_mode(message.from_user.id)):
+        await redis_client.delete(redis_keys.feedback_mode(message.from_user.id))
+        async with SessionFactory() as db:
+            u = await users.get_by_telegram_id(db, message.from_user.id)
+            if u is not None:
+                db.add(Feedback(user_id=u.id, text=text[:4000]))
+                await db.commit()
+        uname = f"@{message.from_user.username}" if message.from_user.username else "(no username)"
+        await handoff.notify_admins(
+            f"💡 <b>Feedback</b> from {uname} (id <code>{message.from_user.id}</code>):\n{text}")
+        await message.answer(i18n.t(lang, "feedback_thanks"), parse_mode="HTML")
         return
 
     # 2. Human handoff: relay to admins.

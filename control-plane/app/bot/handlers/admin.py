@@ -23,6 +23,7 @@ from app.core.logging import get_logger
 from app.models.abuse_event import AbuseEvent
 from app.models.api_key import ApiKey
 from app.models.enums import PaymentStatus, SubscriptionStatus
+from app.models.feedback import Feedback
 from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.referral import Commission, Referral
@@ -218,6 +219,7 @@ async def admin_help_cmd(message: Message) -> None:
         "/notion [sync] — Notion CRM status / sync now\n"
         "/broadcast &lt;msg&gt; — message every user\n"
         "/push &lt;segment&gt; &lt;msg&gt; — message a segment (opted-in)\n"
+        "/feedback — view recent client feedback\n"
         "/export — download customers CSV\n"
         "/reply &lt;id&gt; &lt;msg&gt; — answer a support handoff\n"
         "/close &lt;id&gt; — end a support handoff",
@@ -244,6 +246,24 @@ async def broadcast_cmd(message: Message, command: CommandObject) -> None:
             failed += 1
         await asyncio.sleep(0.05)  # stay well under Telegram's ~30 msg/s limit
     await message.answer(f"📣 Broadcast done — {sent} sent, {failed} failed.")
+
+
+@router.message(Command("feedback"))
+async def feedback_view_cmd(message: Message) -> None:
+    """/feedback — show the latest client suggestions submitted via 💬 Feedback."""
+    async with SessionFactory() as db:
+        rows = list(await db.execute(
+            select(Feedback, User.username, User.telegram_id)
+            .join(User, User.id == Feedback.user_id)
+            .order_by(Feedback.id.desc()).limit(15)))
+    if not rows:
+        await message.answer("No feedback yet. 💬")
+        return
+    lines = ["<b>💡 Recent feedback</b>"]
+    for fb, uname, tid in rows:
+        who = f"@{uname}" if uname else f"id {tid}"
+        lines.append(f"\n• {who} ({fb.created_at:%Y-%m-%d}):\n{fb.text}")
+    await message.answer("\n".join(lines), parse_mode="HTML")
 
 
 @router.message(Command("push"))

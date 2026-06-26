@@ -34,6 +34,18 @@ def main_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, is_persistent=True)
 
 
+def help_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Support hub: FAQ topics, then talk-to-a-person, then 'Other' (last)."""
+    rows = [
+        [InlineKeyboardButton(text=i18n.t(lang, "faq_pay"), callback_data="faq:pay")],
+        [InlineKeyboardButton(text=i18n.t(lang, "faq_key"), callback_data="faq:key")],
+        [InlineKeyboardButton(text=i18n.t(lang, "faq_device"), callback_data="faq:device")],
+        [InlineKeyboardButton(text=i18n.t(lang, "help_human_btn"), callback_data="help:human")],
+        [InlineKeyboardButton(text=i18n.t(lang, "help_other_btn"), callback_data="help:other")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def plans_keyboard(plans: list[Plan], lang: str) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(
