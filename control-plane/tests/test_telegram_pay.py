@@ -15,24 +15,32 @@ from app.services import promos, subscriptions, telegram_pay
 from tests.factories import make_plan, make_user
 
 
-# ─── Pure: payload codec + Stars/card amounts ─────────────────────────────────
+# ─── Pure: payload codec + amounts ────────────────────────────────────────────
 def test_payload_round_trips():
-    raw = telegram_pay.build_payload(
-        plan_id=7, method="telegram_stars", promo_code_id=3, usd_cents=4900)
+    raw = telegram_pay.build_payload(plan_id=7, method="telegram_stars", promo_code_id=3)
     p = telegram_pay.parse_payload(raw)
-    assert p.plan_id == 7 and p.method == "telegram_stars"
-    assert p.promo_code_id == 3 and p.usd_cents == 4900
+    assert p.plan_id == 7 and p.method == "telegram_stars" and p.promo_code_id == 3
     # no promo encodes as "-"
     p2 = telegram_pay.parse_payload(
-        telegram_pay.build_payload(plan_id=1, method="telegram_card", promo_code_id=None, usd_cents=100))
+        telegram_pay.build_payload(plan_id=1, method="telegram_card", promo_code_id=None))
     assert p2.promo_code_id is None
 
 
 def test_parse_payload_rejects_garbage():
     assert telegram_pay.parse_payload("") is None
-    assert telegram_pay.parse_payload("nope|1|2|3|4") is None
-    assert telegram_pay.parse_payload("tg|x|stars|-|100") is None
-    assert telegram_pay.parse_payload("tg|1|stars|-") is None  # too few parts
+    assert telegram_pay.parse_payload("nope|1|stars|-") is None     # bad prefix
+    assert telegram_pay.parse_payload("tg|x|stars|-") is None        # bad int
+    assert telegram_pay.parse_payload("tg|1|stars") is None          # too few parts
+    assert telegram_pay.parse_payload("tg|1|stars|-|100") is None    # too many parts
+
+
+def test_charged_usd_derives_from_what_telegram_charged():
+    from decimal import Decimal as D
+    # card: cents / 100
+    assert telegram_pay.charged_usd(total_amount=4900, currency="USD", usd_to_stars=50) == D("49.00")
+    # stars: stars / rate
+    assert telegram_pay.charged_usd(total_amount=2450, currency="XTR", usd_to_stars=50) == D("49.00")
+    assert telegram_pay.charged_usd(total_amount=1960, currency="XTR", usd_to_stars=50) == D("39.20")
 
 
 async def test_stars_amount_explicit_derived_and_scaled(db):
@@ -59,10 +67,12 @@ async def test_settle_grants_and_is_idempotent(db):
     user = await make_user(db, telegram_id=7001, username="buyer")
     await db.commit()
     payload = telegram_pay.build_payload(
-        plan_id=plan.id, method="telegram_stars", promo_code_id=None, usd_cents=4900)
+        plan_id=plan.id, method="telegram_stars", promo_code_id=None)
 
+    # Stars: Telegram charged 2450 XTR → booked as $49.00 (2450 / 50).
     result = await telegram_pay.settle(
-        db, telegram_id=7001, username="buyer", charge_id="charge-1", payload=payload)
+        db, telegram_id=7001, username="buyer", charge_id="charge-1", payload=payload,
+        total_amount=2450, currency="XTR")
     await db.commit()
     assert result is not None and not result.already_processed
     assert result.plan_name == "monthly" and result.new_key_raw  # fresh key issued
@@ -74,12 +84,24 @@ async def test_settle_grants_and_is_idempotent(db):
 
     # Replayed delivery → no-op, no second payment row.
     again = await telegram_pay.settle(
-        db, telegram_id=7001, username="buyer", charge_id="charge-1", payload=payload)
+        db, telegram_id=7001, username="buyer", charge_id="charge-1", payload=payload,
+        total_amount=2450, currency="XTR")
     await db.commit()
     assert again.already_processed
     count = await db.scalar(
         select(func.count()).select_from(Payment).where(Payment.external_id == "charge-1"))
     assert count == 1
+
+
+async def test_settle_rejects_method_currency_mismatch(db):
+    plan = await make_plan(db, name="monthly", price="49.00")
+    await db.commit()
+    # A Stars payload settled with a USD charge (or vice-versa) is rejected.
+    stars_payload = telegram_pay.build_payload(
+        plan_id=plan.id, method="telegram_stars", promo_code_id=None)
+    assert await telegram_pay.settle(
+        db, telegram_id=7008, username=None, charge_id="cx", payload=stars_payload,
+        total_amount=4900, currency="USD") is None
 
 
 async def test_settle_records_promo_redemption(db):
@@ -89,11 +111,15 @@ async def test_settle_records_promo_redemption(db):
                                 discount_value=Decimal("20"))
     await db.commit()
     payload = telegram_pay.build_payload(
-        plan_id=plan.id, method="telegram_stars", promo_code_id=promo.id, usd_cents=3920)
+        plan_id=plan.id, method="telegram_stars", promo_code_id=promo.id)
+    # 20% off → Telegram charged 1960 XTR → booked $39.20.
     result = await telegram_pay.settle(
-        db, telegram_id=7002, username=None, charge_id="charge-2", payload=payload)
+        db, telegram_id=7002, username=None, charge_id="charge-2", payload=payload,
+        total_amount=1960, currency="XTR")
     await db.commit()
     assert result is not None
+    pay = await db.scalar(select(Payment).where(Payment.external_id == "charge-2"))
+    assert pay.amount == Decimal("39.20")
     rows = list(await db.scalars(
         select(PromoRedemption).where(PromoRedemption.promo_code_id == promo.id)))
     assert len(rows) == 1 and rows[0].user_id == user.id
@@ -108,18 +134,41 @@ async def test_settle_unlocks_referral_commission(db):
                     rate=Decimal("0.20"), status=ReferralStatus.PENDING))
     await db.commit()
     payload = telegram_pay.build_payload(
-        plan_id=plan.id, method="telegram_card", promo_code_id=None, usd_cents=4900)
+        plan_id=plan.id, method="telegram_card", promo_code_id=None)
+    # Card: Telegram charged 4900 cents → $49.00 → commission $9.80.
     await telegram_pay.settle(
-        db, telegram_id=7003, username=None, charge_id="charge-3", payload=payload)
+        db, telegram_id=7003, username=None, charge_id="charge-3", payload=payload,
+        total_amount=4900, currency="USD")
     await db.commit()
     commission = await db.scalar(select(Commission).where(Commission.referred_user_id == buyer.id))
     assert commission is not None and commission.amount == Decimal("9.80")
     assert commission.status == CommissionStatus.PAYABLE
 
 
+async def test_grant_free_activates_without_charge(db):
+    plan = await make_plan(db, name="monthly", price="49.00")
+    user = await make_user(db, telegram_id=7009)
+    promo = await promos.create(db, code="FREE100", discount_type=DISCOUNT_PERCENT,
+                                discount_value=Decimal("100"))
+    await db.commit()
+    result = await telegram_pay.grant_free(
+        db, telegram_id=7009, username=None, plan_id=plan.id, promo_code_id=promo.id)
+    await db.commit()
+    assert result is not None and not result.already_processed
+    pay = await db.scalar(select(Payment).where(Payment.user_id == user.id))
+    assert pay.amount == Decimal("0.00") and pay.provider == "promo_free"
+    assert await subscriptions.get_active_with_plan(db, user.id) is not None
+    # idempotent — a second free grant is a no-op
+    again = await telegram_pay.grant_free(
+        db, telegram_id=7009, username=None, plan_id=plan.id, promo_code_id=promo.id)
+    await db.commit()
+    assert again.already_processed
+
+
 async def test_settle_rejects_bad_payload(db):
     assert await telegram_pay.settle(
-        db, telegram_id=7004, username=None, charge_id="c", payload="garbage") is None
+        db, telegram_id=7004, username=None, charge_id="c", payload="garbage",
+        total_amount=100, currency="XTR") is None
 
 
 # ─── Shared checkout resolution (plan + armed promo) ──────────────────────────
