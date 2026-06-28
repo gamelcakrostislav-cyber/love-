@@ -125,7 +125,7 @@ async def test_settle_rejects_bad_payload(db):
 # ─── Shared checkout resolution (plan + armed promo) ──────────────────────────
 async def test_resolve_checkout_applies_promo(db):
     from app.services import payments as pay_svc
-    plan = await make_plan(db, name="monthly", price="49.00")
+    await make_plan(db, name="monthly", price="49.00")
     user = await make_user(db, telegram_id=7005)
     await promos.create(db, code="HALF", discount_type=DISCOUNT_PERCENT,
                         discount_value=Decimal("50"))
