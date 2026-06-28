@@ -43,6 +43,7 @@ from app.models.plan import Plan
 from app.models.referral import Commission, Referral
 from app.services import devices as devices_svc
 from app.services import (
+    bot_content,
     growth,
     handoff,
     keys,
@@ -292,6 +293,20 @@ async def _human_flow(message: Message) -> None:
 
 
 # ─── /start + language ───────────────────────────────────────────────────────
+async def _send_welcome(target: Message, lang: str, *, returning: bool) -> None:
+    """Branded welcome: the admin-set banner photo + welcome text when present,
+    else the default localized greeting. Always attaches the persistent menu."""
+    async with SessionFactory() as db:
+        banner = await bot_content.get(db, "banner")
+        custom = await bot_content.get(db, "welcome")
+    text = custom or i18n.t(lang, "welcome_back" if returning else "welcome")
+    kb = main_menu_keyboard(lang)
+    if banner:
+        await target.answer_photo(banner, caption=text, parse_mode="HTML", reply_markup=kb)
+    else:
+        await target.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
 async def _do_start(message: Message, ref_payload: str | None) -> None:
     async with SessionFactory() as db:
         user, created = await users.get_or_create(
@@ -317,9 +332,8 @@ async def _do_start(message: Message, ref_payload: str | None) -> None:
         lang = i18n.normalize(user.language)
         has_sub = await _has_active_sub(db, user.id)
 
-    # Returning user: warm welcome-back + the persistent menu.
-    await message.answer(i18n.t(lang, "welcome_back"),
-                         parse_mode="HTML", reply_markup=main_menu_keyboard(lang))
+    # Returning user: warm welcome-back (branded if configured) + the menu.
+    await _send_welcome(message, lang, returning=True)
     if not has_sub:
         await message.answer(i18n.t(lang, "getting_started"), parse_mode="HTML")
 
@@ -345,8 +359,7 @@ async def set_language(cb: CallbackQuery) -> None:
         has_sub = await _has_active_sub(db, user.id)
         await db.commit()
     await cb.message.answer(i18n.t(code, "language_set", lang=i18n.LANGUAGES[code]))
-    await cb.message.answer(i18n.t(code, "welcome"), parse_mode="HTML",
-                            reply_markup=main_menu_keyboard(code))
+    await _send_welcome(cb.message, code, returning=False)
     # New / unsubscribed users get the quick-start guide right after choosing.
     if not has_sub:
         await cb.message.answer(i18n.t(code, "getting_started"), parse_mode="HTML")

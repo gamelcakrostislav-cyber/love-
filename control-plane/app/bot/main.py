@@ -23,7 +23,9 @@ from aiogram.types import (
 from app.bot import i18n
 from app.bot.handlers import admin, client, payments
 from app.core.config import settings
+from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
+from app.services import bot_content
 
 log = get_logger("bot")
 
@@ -121,6 +123,15 @@ async def _set_menu_button(bot: Bot) -> None:
         log.warning("could not set menu button: %s", exc)
 
 
+async def _set_profile(bot: Bot) -> None:
+    """Apply the admin-set description/about to Telegram. Best-effort."""
+    try:
+        async with SessionFactory() as db:
+            await bot_content.apply_profile(bot, db)
+    except Exception as exc:  # noqa: BLE001 - branding is cosmetic; never block startup
+        log.warning("could not apply bot profile: %s", exc)
+
+
 async def main() -> None:
     configure_logging()
     if not settings.bot_token or settings.bot_token == "CHANGE_ME":
@@ -135,6 +146,7 @@ async def main() -> None:
     dp = build_dispatcher()
     await _set_commands(bot)
     await _set_menu_button(bot)
+    await _set_profile(bot)
     log.info("bot starting (long polling)")
     await dp.start_polling(bot)
 

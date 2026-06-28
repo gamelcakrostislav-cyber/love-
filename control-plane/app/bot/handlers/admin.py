@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import BaseFilter, Command, CommandObject
 from aiogram.types import BufferedInputFile, LinkPreviewOptions, Message
 from sqlalchemy import func, select
@@ -35,6 +35,7 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.services import activation, devices as devices_svc
 from app.services import (
+    bot_content,
     handoff,
     keys,
     notifications,
@@ -235,6 +236,7 @@ async def admin_help_cmd(message: Message) -> None:
         "/promoedit &lt;code&gt; … — change a code (amount/plan/max/days/on|off)\n"
         "/promos — list discount codes\n"
         "/promooff &lt;code&gt; — deactivate a code\n"
+        "/content — edit bot copy (welcome, banner, description, about)\n"
         "/feedback — view recent client feedback\n"
         "/export — download customers CSV\n"
         "/reply &lt;id&gt; &lt;msg&gt; — answer a support handoff\n"
@@ -578,6 +580,104 @@ async def promoedit_cmd(message: Message, command: CommandObject) -> None:
         await db.commit()
         summary = _promo_summary(promo, plan_name)
     await message.answer(f"✅ Updated {summary}", parse_mode="HTML")
+
+
+# ─── Bot branding (admin-editable copy) ──────────────────────────────────────
+async def _save_content(message: Message, key: str, value: str, apply_profile: bool) -> None:
+    _, limit = bot_content.FIELDS[key]
+    value = value.strip()
+    if len(value) > limit:
+        await message.answer(f"Too long — {key} is capped at {limit} characters.")
+        return
+    async with SessionFactory() as db:
+        await bot_content.set_value(db, key, value, actor=f"admin:{message.from_user.id}")
+        if apply_profile:
+            await bot_content.apply_profile(message.bot, db)
+        await db.commit()
+    await message.answer(f"✅ Updated <b>{key}</b>.", parse_mode="HTML")
+
+
+@router.message(Command("content"))
+async def content_cmd(message: Message) -> None:
+    """Show the editable bot copy + how to change each piece."""
+    async with SessionFactory() as db:
+        current = await bot_content.all_content(db)
+    lines = ["<b>🎨 Bot content</b> (edit live, no redeploy)"]
+    for key, (label, limit) in bot_content.FIELDS.items():
+        val = current.get(key)
+        if key == "banner":
+            shown = "set ✅" if val else "—"
+        else:
+            shown = (val[:60] + "…") if val and len(val) > 60 else (val or "—")
+        lines.append(f"\n• <b>{key}</b> — {label}\n  <i>{shown}</i>")
+    lines.append(
+        "\n\n<b>Commands</b>\n"
+        "/setwelcome &lt;text&gt; — /start greeting\n"
+        "/setbanner — reply to a photo (or send a photo captioned /setbanner)\n"
+        "/setdescription &lt;text&gt; — the 'What can this bot do?' screen\n"
+        "/setabout &lt;text&gt; — short profile bio\n"
+        "/clearbanner — remove the /start banner")
+    await message.answer("\n".join(lines), parse_mode="HTML",
+                         link_preview_options=LinkPreviewOptions(is_disabled=True))
+
+
+@router.message(Command("setwelcome"))
+async def setwelcome_cmd(message: Message, command: CommandObject) -> None:
+    text = (command.args or "").strip()
+    if not text:
+        await message.answer("Usage: /setwelcome &lt;text&gt; (HTML allowed).", parse_mode="HTML")
+        return
+    await _save_content(message, "welcome", text, apply_profile=False)
+
+
+@router.message(Command("setdescription"))
+async def setdescription_cmd(message: Message, command: CommandObject) -> None:
+    text = (command.args or "").strip()
+    if not text:
+        await message.answer("Usage: /setdescription &lt;text&gt; (≤512 chars).", parse_mode="HTML")
+        return
+    await _save_content(message, "description", text, apply_profile=True)
+
+
+@router.message(Command("setabout"))
+async def setabout_cmd(message: Message, command: CommandObject) -> None:
+    text = (command.args or "").strip()
+    if not text:
+        await message.answer("Usage: /setabout &lt;text&gt; (≤120 chars).", parse_mode="HTML")
+        return
+    await _save_content(message, "about", text, apply_profile=True)
+
+
+def _banner_file_id(message: Message) -> str | None:
+    if message.photo:
+        return message.photo[-1].file_id
+    if message.reply_to_message and message.reply_to_message.photo:
+        return message.reply_to_message.photo[-1].file_id
+    return None
+
+
+@router.message(Command("setbanner"))
+async def setbanner_cmd(message: Message) -> None:
+    fid = _banner_file_id(message)
+    if not fid:
+        await message.answer(
+            "Send a photo, then <b>reply to it</b> with /setbanner — or send a photo "
+            "with the caption <code>/setbanner</code>.", parse_mode="HTML")
+        return
+    await _save_content(message, "banner", fid, apply_profile=False)
+
+
+@router.message(F.photo, F.caption.func(lambda c: bool(c) and c.strip().lower().startswith("/setbanner")))
+async def setbanner_photo(message: Message) -> None:
+    await _save_content(message, "banner", message.photo[-1].file_id, apply_profile=False)
+
+
+@router.message(Command("clearbanner"))
+async def clearbanner_cmd(message: Message) -> None:
+    async with SessionFactory() as db:
+        await bot_content.set_value(db, "banner", "", actor=f"admin:{message.from_user.id}")
+        await db.commit()
+    await message.answer("✅ Banner cleared — /start shows text only.")
 
 
 @router.message(Command("grant"))
