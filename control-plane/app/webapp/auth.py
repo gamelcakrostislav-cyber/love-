@@ -31,8 +31,11 @@ class InitData:
 
 
 def verify_init_data(init_data: str, bot_token: str, *, max_age: int = 86400) -> InitData | None:
-    """Return the verified Telegram user, or None if the signature/age is bad."""
-    if not init_data or not bot_token:
+    """Return the verified Telegram user, or None if the signature/age is bad.
+
+    Fails closed when the bot token is unset/placeholder: otherwise the signing
+    key would be a publicly-known constant and any initData could be forged."""
+    if not init_data or not bot_token or bot_token == "CHANGE_ME":
         return None
     try:
         pairs = dict(parse_qsl(init_data, strict_parsing=True, keep_blank_values=True))

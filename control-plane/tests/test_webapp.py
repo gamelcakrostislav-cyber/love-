@@ -66,10 +66,26 @@ def test_verify_rejects_missing_or_empty():
     assert verify_init_data(sign_init_data("t", {"id": 1}), "") is None
 
 
+def test_verify_fails_closed_on_placeholder_token():
+    # An unset/placeholder token would make the signing key a public constant —
+    # verification must refuse even a "validly" signed payload.
+    raw = sign_init_data("CHANGE_ME", {"id": 1})
+    assert verify_init_data(raw, "CHANGE_ME") is None
+
+
 # ─── Endpoints (DB + ASGI) ────────────────────────────────────────────────────
 @pytest.fixture
 def client():
     return httpx.AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t")
+
+
+@pytest.fixture
+def real_token(monkeypatch):
+    """A non-placeholder bot token so initData auth passes; bot_username set so
+    /me builds an invite link without a getMe network call."""
+    monkeypatch.setattr(settings, "bot_token", "123456:TESTTOKEN")
+    monkeypatch.setattr(settings, "bot_username", "testbot")
+    return settings.bot_token
 
 
 async def test_me_requires_init_data(client):
@@ -78,13 +94,13 @@ async def test_me_requires_init_data(client):
         assert r.status_code == 401
 
 
-async def test_me_returns_subscription_and_referrals(db, client):
+async def test_me_returns_subscription_and_referrals(db, client, real_token):
     plan = await make_plan(db, name="monthly", price="49.00")
     user = await make_user(db, telegram_id=900100, username="ceo")
     await make_subscription(db, user=user, plan=plan, days_left=20)
     await db.commit()
 
-    auth = "tma " + sign_init_data(settings.bot_token, {"id": 900100, "username": "ceo"})
+    auth = "tma " + sign_init_data(real_token, {"id": 900100, "username": "ceo"})
     async with client:
         r = await client.get("/webapp/api/me", headers={"Authorization": auth})
     assert r.status_code == 200
@@ -92,15 +108,41 @@ async def test_me_returns_subscription_and_referrals(db, client):
     assert data["telegram_id"] == 900100
     assert data["subscription"]["plan"] == "monthly"
     assert data["referrals"]["rate_pct"] == 20
+    assert data["referrals"]["invite_link"] == "https://t.me/testbot?start=900100"
 
 
-async def test_plans_endpoint_lists_methods(db, client):
+async def test_me_rejects_forged_when_token_is_placeholder(db, client):
+    # With the default CHANGE_ME token, even a "validly" signed payload is refused.
+    await make_user(db, telegram_id=900150)
+    await db.commit()
+    auth = "tma " + sign_init_data(settings.bot_token, {"id": 900150})  # bot_token == CHANGE_ME
+    async with client:
+        r = await client.get("/webapp/api/me", headers={"Authorization": auth})
+    assert r.status_code == 401
+
+
+async def test_plans_endpoint_lists_methods(db, client, real_token):
     await make_plan(db, name="monthly", price="49.00")
     await db.commit()
-    auth = "tma " + sign_init_data(settings.bot_token, {"id": 900200})
+    auth = "tma " + sign_init_data(real_token, {"id": 900200})
     async with client:
         r = await client.get("/webapp/api/plans", headers={"Authorization": auth})
     assert r.status_code == 200
     body = r.json()
     assert any(p["name"] == "monthly" for p in body["plans"])
     assert "crypto" in body["methods"] and "stars" in body["methods"]
+
+
+async def test_buy_rejects_bad_method_and_unknown_plan(db, client, real_token):
+    await make_plan(db, name="monthly", price="49.00")
+    await db.commit()
+    auth = "tma " + sign_init_data(real_token, {"id": 900300})
+    async with client:
+        bad_method = await client.post(
+            "/webapp/api/buy", headers={"Authorization": auth},
+            json={"plan": "monthly", "method": "bogus"})
+        unknown_plan = await client.post(
+            "/webapp/api/buy", headers={"Authorization": auth},
+            json={"plan": "ghost", "method": "stars", "code": 123})  # non-str code must not 500
+    assert bad_method.status_code == 400
+    assert unknown_plan.status_code == 400

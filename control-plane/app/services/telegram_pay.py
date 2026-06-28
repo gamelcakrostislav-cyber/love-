@@ -159,9 +159,10 @@ async def grant_free(
     if plan is None:
         return None
     charge_id = f"free:{plan_id}:{promo_code_id or '-'}:{user.id}"
+    uid, tid, pname = user.id, user.telegram_id, plan.name
     existing = await db.scalar(select(Payment).where(Payment.external_id == charge_id))
     if existing is not None:
-        return await _already(db, user_id=user.id, telegram_id=user.telegram_id, plan_name=plan.name)
+        return await _already(db, user_id=uid, telegram_id=tid, plan_name=pname)
 
     payment = Payment(
         user_id=user.id, plan_id=plan.id, amount=Decimal("0.00"), currency="USD",
@@ -169,7 +170,12 @@ async def grant_free(
         promo_code_id=promo_code_id,
     )
     db.add(payment)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Concurrent double-tap won the race on the unique charge id — no-op.
+        await db.rollback()
+        return await _already(db, user_id=uid, telegram_id=tid, plan_name=pname)
     result = await activation.grant(db, user=user, plan=plan, payment=payment, actor="system")
     if promo_code_id is not None:
         await promos.record_redemption(

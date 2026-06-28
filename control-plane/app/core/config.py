@@ -49,6 +49,9 @@ class Settings(BaseSettings):
 
     # Telegram bot
     bot_token: str = "CHANGE_ME"
+    # Bot @username (without @). Optional — lets the gateway build invite links
+    # without a getMe network call on the Mini App's hot path.
+    bot_username: str = ""
     # NoDecode stops pydantic-settings from JSON-decoding the env value before our
     # validator runs, so a bare "1966832731" or a "111,222" list both work.
     admin_ids: Annotated[set[int], NoDecode] = Field(default_factory=set)

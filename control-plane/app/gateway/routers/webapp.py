@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.gateway.deps import get_db
 from app.models.enums import ReferralStatus
 from app.models.plan import Plan
@@ -36,6 +37,18 @@ from app.services import (
 from app.webapp.auth import verify_init_data
 
 router = APIRouter(prefix="/webapp/api", tags=["webapp"])
+log = get_logger("webapp")
+
+
+def _enabled_methods() -> list[str]:
+    """Payment methods offered in the Mini App, mirroring the bot's gating."""
+    methods: list[str] = []
+    if settings.telegram_stars_enabled:
+        methods.append("stars")
+    if settings.telegram_card_enabled and settings.telegram_provider_token not in ("", "CHANGE_ME"):
+        methods.append("card")
+    methods.append("crypto")
+    return methods
 
 
 async def require_webapp_user(
@@ -114,11 +127,7 @@ async def list_plans(_: User = Depends(require_webapp_user), db: AsyncSession = 
         }
         for p in rows
     ]
-    methods = ["stars"] if settings.telegram_stars_enabled else []
-    if settings.telegram_card_enabled and settings.telegram_provider_token not in ("", "CHANGE_ME"):
-        methods.append("card")
-    methods.append("crypto")
-    return {"plans": plans, "methods": methods}
+    return {"plans": plans, "methods": _enabled_methods()}
 
 
 @router.post("/devices/{device_id}/remove")
@@ -139,7 +148,12 @@ async def buy(
 ) -> dict:
     plan_name = str(body.get("plan", "")).lower()
     method = str(body.get("method", "stars")).lower()
-    code = body.get("code") or None
+    raw_code = body.get("code")
+    code = str(raw_code).strip() or None if raw_code not in (None, "") else None
+
+    # Validate the method up front (and that it's actually enabled).
+    if method not in _enabled_methods():
+        raise HTTPException(status_code=400, detail="payment method unavailable")
 
     resolved = await payments.resolve_checkout(db, user=user, plan_name=plan_name, armed_code=code)
     if resolved is None or resolved.plan.is_trial or resolved.plan.price <= 0:
@@ -159,9 +173,13 @@ async def buy(
                 "expires_at": result.expires_at.isoformat() if result else None}
 
     if method == "crypto":
-        _payment, pay_url = await payments.start_checkout(
-            db, user=user, plan=plan, amount=resolved.final, promo=resolved.promo)
-        await db.commit()
+        try:
+            _payment, pay_url = await payments.start_checkout(
+                db, user=user, plan=plan, amount=resolved.final, promo=resolved.promo)
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 - provider error → clean 502
+            log.warning("crypto checkout failed: %s", exc)
+            raise HTTPException(status_code=502, detail="payment_provider_unavailable") from exc
         return {"status": "link", "kind": "crypto", "url": pay_url}
 
     # Native Stars / card → an invoice link the Mini App opens with openInvoice.
@@ -179,7 +197,11 @@ async def buy(
         currency, provider_token = "USD", settings.telegram_provider_token
     await db.commit()
 
-    link = await telegram_api.create_invoice_link(
-        title=title, description=desc, payload=payload,
-        currency=currency, prices=prices, provider_token=provider_token)
+    try:
+        link = await telegram_api.create_invoice_link(
+            title=title, description=desc, payload=payload,
+            currency=currency, prices=prices, provider_token=provider_token)
+    except Exception as exc:  # noqa: BLE001 - Bot API error → clean 502
+        log.warning("createInvoiceLink failed: %s", exc)
+        raise HTTPException(status_code=502, detail="payment_provider_unavailable") from exc
     return {"status": "link", "kind": "invoice", "url": link}

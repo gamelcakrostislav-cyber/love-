@@ -41,7 +41,10 @@ async def create_invoice_link(
 
 
 async def get_bot_username() -> str:
-    """Bot @username (cached). Empty string when the token isn't set."""
+    """Bot @username. Prefers the configured value (no network); else a best-effort
+    getMe, caching ONLY a successful result so a transient failure isn't sticky."""
+    if settings.bot_username:
+        return settings.bot_username
     if "username" in _me:
         return _me["username"]
     if not _token_ok():
@@ -51,8 +54,10 @@ async def get_bot_username() -> str:
             resp = await client.get(f"{_API}/bot{settings.bot_token}/getMe")
             resp.raise_for_status()
             data = resp.json()
-        _me["username"] = data.get("result", {}).get("username", "") or ""
+        username = data.get("result", {}).get("username", "") or ""
     except Exception as exc:  # noqa: BLE001 - best-effort; never break a request
         log.warning("getMe failed: %s", exc)
-        _me["username"] = ""
-    return _me["username"]
+        return ""
+    if username:
+        _me["username"] = username  # cache successes only
+    return username
