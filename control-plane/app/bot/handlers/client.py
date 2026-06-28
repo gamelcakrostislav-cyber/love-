@@ -8,6 +8,7 @@ triggers server-side actions.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from html import escape as html_escape
 
 from urllib.parse import quote
 
@@ -510,6 +511,12 @@ async def _disarm_promo(telegram_id: int) -> None:
     await redis_client.delete(redis_keys.promo_armed(telegram_id))
 
 
+def _fmt_code(code: str) -> str:
+    """A code is user-controlled and echoed into HTML-parsed replies — escape it
+    and cap the length so stray markup can't break (or inject into) the message."""
+    return html_escape(code[:32])
+
+
 async def _apply_promo(message: Message, lang: str, raw_code: str) -> None:
     """Validate a typed discount code: arm it for the next purchase, or explain
     why it can't be used — a code that doesn't exist (or is inactive / expired /
@@ -527,10 +534,11 @@ async def _apply_promo(message: Message, lang: str, raw_code: str) -> None:
         )
         desc = promos.describe(promo) if promo else ""
     if not ok:
-        await message.answer(i18n.t(lang, "promo_invalid", code=code), parse_mode="HTML")
+        await message.answer(i18n.t(lang, "promo_invalid", code=_fmt_code(code)), parse_mode="HTML")
         return
     await redis_client.set(redis_keys.promo_armed(message.from_user.id), code, ex=1800)
-    await message.answer(i18n.t(lang, "promo_applied", code=code, desc=desc), parse_mode="HTML")
+    await message.answer(i18n.t(lang, "promo_applied", code=_fmt_code(code), desc=desc),
+                         parse_mode="HTML")
 
 
 @router.message(Command("promo"))
@@ -567,10 +575,10 @@ async def _do_buy(
         if isinstance(result, str):  # validation failed — `result` is the reason
             if result in _PROMO_TERMINAL:
                 await _disarm_promo(telegram_id)
-            return i18n.t(lang, _PROMO_ERROR_STRING[result], code=code, plan=plan.name)
+            return i18n.t(lang, _PROMO_ERROR_STRING[result], code=_fmt_code(code), plan=plan.name)
         _payment, pay_url = await payments.start_checkout(
             db, user=user, plan=plan, amount=result.final, promo=result.promo)
-        return i18n.t(lang, "buy_invoice_promo", name=plan.name, code=result.promo.code,
+        return i18n.t(lang, "buy_invoice_promo", name=plan.name, code=_fmt_code(result.promo.code),
                       desc=result.description, original=result.original,
                       price=result.final, currency=plan.currency, url=pay_url)
 
@@ -706,9 +714,11 @@ async def support_or_relay(message: Message) -> None:
         await open_language(message)
         return
 
+    # An active operator conversation always wins over a stale capture flag, so
+    # the feedback / promo-entry captures below are skipped while relaying.
     # 1b. Feedback capture: the 💬 Feedback button armed this — store the next
     # message as a suggestion and forward it to the team.
-    if await redis_client.get(redis_keys.feedback_mode(message.from_user.id)):
+    if not relaying and await redis_client.get(redis_keys.feedback_mode(message.from_user.id)):
         await redis_client.delete(redis_keys.feedback_mode(message.from_user.id))
         async with SessionFactory() as db:
             u = await users.get_by_telegram_id(db, message.from_user.id)
@@ -721,12 +731,22 @@ async def support_or_relay(message: Message) -> None:
         await message.answer(i18n.t(lang, "feedback_thanks"), parse_mode="HTML")
         return
 
-    # 1c. Promo-code entry: /promo (no code) armed this — validate the typed code
-    # (a non-existent code gets a clear 'invalid' reply instead of hitting the AI).
-    if await redis_client.get(redis_keys.promo_entry(message.from_user.id)):
+    # 1c. Promo-code entry: /promo (no code) armed this. A real code is a single
+    # short token → validate it (a non-existent code gets a clear 'invalid' reply
+    # instead of hitting the AI). Empty input re-prompts and stays armed; a
+    # sentence-like message means the user moved on, so cancel entry and let it
+    # flow on to the AI.
+    if not relaying and await redis_client.get(redis_keys.promo_entry(message.from_user.id)):
+        candidate = text.strip()
+        if not candidate:
+            await message.answer(i18n.t(lang, "promo_enter"), parse_mode="HTML")
+            return
+        if " " not in candidate and len(candidate) <= 40:
+            await redis_client.delete(redis_keys.promo_entry(message.from_user.id))
+            await _apply_promo(message, lang, candidate)
+            return
+        # Doesn't look like a code — drop entry mode and fall through to the AI.
         await redis_client.delete(redis_keys.promo_entry(message.from_user.id))
-        await _apply_promo(message, lang, text)
-        return
 
     # 2. Human handoff: relay to admins.
     if relaying:
