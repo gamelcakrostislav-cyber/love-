@@ -53,10 +53,19 @@ class Settings(BaseSettings):
     # validator runs, so a bare "1966832731" or a "111,222" list both work.
     admin_ids: Annotated[set[int], NoDecode] = Field(default_factory=set)
 
-    # Payments
+    # Payments — Crypto Pay (@CryptoBot)
     cryptopay_api_token: str = "CHANGE_ME"
     cryptopay_api_base: str = "https://pay.crypt.bot/api"
     cryptopay_webhook_enabled: bool = True
+
+    # Native Telegram payments (in-app). Stars need no provider/hosting; card
+    # payments need a provider token from BotFather (Telegram Payments 2.0).
+    telegram_stars_enabled: bool = True
+    telegram_card_enabled: bool = False
+    telegram_provider_token: str = "CHANGE_ME"   # BotFather provider token (cards)
+    # Fallback Stars price = round(plan.price_usd * usd_to_stars) when a plan has
+    # no explicit price_stars. ~50 ⭐ per USD ≈ Telegram's ~$0.02/Star.
+    usd_to_stars: int = 50
 
     # Referral / rev-share
     referral_rate_standard: float = 0.20

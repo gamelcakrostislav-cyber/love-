@@ -14,7 +14,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
 
 from app.bot import i18n
-from app.bot.handlers import admin, client
+from app.bot.handlers import admin, client, payments
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 
@@ -25,6 +25,9 @@ def build_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     # Admin router first: its IsAdmin filter scopes /stats, /grant, etc.
     dp.include_router(admin.router)
+    # Payments before the client catch-all so pre_checkout / successful_payment
+    # and the pay:* callbacks are handled here.
+    dp.include_router(payments.router)
     dp.include_router(client.router)
     return dp
 

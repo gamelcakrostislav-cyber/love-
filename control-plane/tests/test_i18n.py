@@ -118,6 +118,17 @@ def test_human_keyword_surfaces_operator_offer():
         assert _wants_human(phrase)
 
 
+def test_native_payment_strings_in_every_language():
+    for lang in i18n.LANGUAGES:
+        for k in ("pay_stars_btn", "pay_card_btn", "pay_crypto_btn"):
+            assert i18n.t(lang, k)
+        assert "{" not in i18n.t(lang, "pay_method_prompt", plan="monthly")
+        assert "{" not in i18n.t(lang, "pay_invoice_desc", plan="monthly", days=30)
+        assert "{" not in i18n.t(lang, "pay_confirmed_key", plan="monthly",
+                                 date="2026-07-01", apikey="ck_abc")
+        assert "{" not in i18n.t(lang, "pay_confirmed_renew", plan="monthly", date="2026-07-01")
+
+
 def test_promo_strings_in_every_language():
     assert "promo" in i18n.COMMAND_ORDER
     for lang in i18n.LANGUAGES:

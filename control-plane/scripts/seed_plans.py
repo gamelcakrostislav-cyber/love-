@@ -38,6 +38,7 @@ PLANS: list[dict] = [
         "name": "monthly",
         "price": Decimal("49.00"),
         "currency": "USD",
+        "price_stars": 2500,   # ~$49 in Telegram Stars
         "duration_days": 30,
         "rate_limit_per_min": 120,
         "max_devices": 2,
@@ -50,6 +51,7 @@ PLANS: list[dict] = [
         "name": "yearly",
         "price": Decimal("479.00"),
         "currency": "USD",
+        "price_stars": 22000,  # ~$479 in Telegram Stars (~2 months free vs monthly)
         "duration_days": 365,
         "rate_limit_per_min": 120,
         "max_devices": 3,

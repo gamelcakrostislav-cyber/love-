@@ -16,6 +16,9 @@ class Plan(Base):
 
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
+    # Explicit price in Telegram Stars (XTR) for native Stars checkout. NULL =
+    # derive from the USD price via the usd_to_stars rate.
+    price_stars: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
 
     rate_limit_per_min: Mapped[int] = mapped_column(Integer, nullable=False)

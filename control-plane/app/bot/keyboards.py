@@ -10,8 +10,14 @@ from aiogram.types import (
 )
 
 from app.bot import i18n
+from app.core.config import settings
 from app.models.device import Device
 from app.models.plan import Plan
+
+
+def card_payments_enabled() -> bool:
+    """Card payments need the feature flag AND a real BotFather provider token."""
+    return settings.telegram_card_enabled and settings.telegram_provider_token not in ("", "CHANGE_ME")
 
 
 def language_keyboard() -> InlineKeyboardMarkup:
@@ -53,13 +59,30 @@ def human_offer_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 
 def plans_keyboard(plans: list[Plan], lang: str) -> InlineKeyboardMarkup:
+    # Paid plans open the payment-method picker; the free trial keeps its
+    # direct activation path.
     rows = [
         [InlineKeyboardButton(
             text=i18n.t(lang, "buy_label", name=p.name, price=p.price, currency=p.currency),
-            callback_data=f"buy:{p.name}",
+            callback_data=f"buy:{p.name}" if p.is_trial else f"pay:choose:{p.name}",
         )]
         for p in plans
     ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def payment_methods_keyboard(plan_name: str, lang: str) -> InlineKeyboardMarkup:
+    """Offer the enabled payment methods for a plan. Crypto Pay is always on;
+    Stars / card depend on their settings."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if settings.telegram_stars_enabled:
+        rows.append([InlineKeyboardButton(
+            text=i18n.t(lang, "pay_stars_btn"), callback_data=f"pay:stars:{plan_name}")])
+    if card_payments_enabled():
+        rows.append([InlineKeyboardButton(
+            text=i18n.t(lang, "pay_card_btn"), callback_data=f"pay:card:{plan_name}")])
+    rows.append([InlineKeyboardButton(
+        text=i18n.t(lang, "pay_crypto_btn"), callback_data=f"pay:crypto:{plan_name}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
