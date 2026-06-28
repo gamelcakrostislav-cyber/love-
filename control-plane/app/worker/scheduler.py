@@ -63,10 +63,11 @@ async def notifications_tick() -> None:
 
 
 async def club_tick() -> None:
+    # sweep() commits each membership change per-user, so a mid-sweep failure
+    # can't roll back already-applied changes.
     try:
         async with SessionFactory() as db:
             invited, removed = await club.sweep(db)
-            await db.commit()
         if invited or removed:
             log.info("club: %d invited, %d removed", invited, removed)
     except Exception as exc:  # noqa: BLE001 - club sync must never crash the worker

@@ -27,7 +27,8 @@ def format_body(text: str, *, telegram_id: int, username: str | None) -> str:
 
 async def route(text: str, *, telegram_id: int, username: str | None) -> None:
     body = format_body(text, telegram_id=telegram_id, username=username)
-    if settings.feedback_channel_id:
-        await notify.send_message(settings.feedback_channel_id, body)
-    else:
-        await handoff.notify_admins(body)
+    # Post to the channel; if it's misconfigured/unreachable, fall back to DMing
+    # admins so feedback is never silently dropped.
+    if settings.feedback_channel_id and await notify.send_message(settings.feedback_channel_id, body):
+        return
+    await handoff.notify_admins(body)

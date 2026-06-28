@@ -17,14 +17,17 @@ log = get_logger("notify")
 
 async def send_message(
     telegram_id: int, text: str, reply_markup: InlineKeyboardMarkup | None = None
-) -> None:
+) -> bool:
+    """Best-effort DM/post. Returns True on success so callers can fall back."""
     if not settings.bot_token or settings.bot_token == "CHANGE_ME":
         log.warning("BOT_TOKEN unset — skipping DM to %s", telegram_id)
-        return
+        return False
     bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     try:
         await bot.send_message(telegram_id, text, reply_markup=reply_markup)
+        return True
     except Exception as exc:  # noqa: BLE001 - never let a DM failure break the webhook
         log.warning("failed DM to %s: %s", telegram_id, exc)
+        return False
     finally:
         await bot.session.close()
