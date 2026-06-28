@@ -1,5 +1,8 @@
 # Deploy: 24/7 VPS hosting + real Crypto Pay payments
 
+> Just want to **test the Mini App** from your Mac without hosting? See
+> [`deploy/tunnel.md`](tunnel.md) — a one-command Cloudflare tunnel.
+
 This guide takes the bot from "runs on my Mac" to "always online, accepts real
 crypto payments." Total time: ~20 minutes. Cost: ~$4–6/month for the server.
 
