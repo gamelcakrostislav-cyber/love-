@@ -8,18 +8,21 @@ phases.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.core.db import engine
 from app.core.logging import configure_logging, get_logger
 from app.core.redis import ping as redis_ping
-from app.gateway.routers import auth, protected, webhooks
+from app.gateway.routers import auth, protected, webapp, webhooks
 from app.services.errors import LicensingError
 
 log = get_logger("gateway")
+_WEBAPP_STATIC = Path(__file__).resolve().parent.parent / "webapp" / "static"
 
 
 @asynccontextmanager
@@ -45,6 +48,9 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(protected.router)
     app.include_router(webhooks.router)
+    app.include_router(webapp.router)
+    # Serve the Mini App static bundle at /app (HTTPS required by Telegram).
+    app.mount("/app", StaticFiles(directory=str(_WEBAPP_STATIC), html=True), name="webapp")
 
     @app.get("/health", tags=["ops"])
     async def health() -> dict:

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Arbitrage — Dashboard</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #17212b);
+      --sec: var(--tg-theme-secondary-bg-color, #232e3c);
+      --text: var(--tg-theme-text-color, #fff);
+      --hint: var(--tg-theme-hint-color, #8a98a6);
+      --link: var(--tg-theme-link-color, #5ea9f6);
+      --btn: var(--tg-theme-button-color, #3390ec);
+      --btn-text: var(--tg-theme-button-text-color, #fff);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font: 15px/1.45 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text); padding-bottom: 64px; }
+    h2 { font-size: 17px; margin: 18px 16px 8px; }
+    .muted { color: var(--hint); }
+    .card { background: var(--sec); border-radius: 12px; margin: 8px 16px; padding: 14px 16px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 0; }
+    .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.08); }
+    .ok { color: #4cd964; } .warn { color: #ff9f0a; }
+    button { font: inherit; border: 0; border-radius: 10px; padding: 11px 14px; color: var(--btn-text);
+      background: var(--btn); font-weight: 600; cursor: pointer; }
+    button.sec { background: rgba(255,255,255,.10); color: var(--text); }
+    button.block { width: 100%; margin-top: 8px; }
+    button:disabled { opacity: .5; }
+    code { background: rgba(255,255,255,.10); padding: 3px 7px; border-radius: 6px; word-break: break-all; }
+    input { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14);
+      background: var(--bg); color: var(--text); font: inherit; margin-top: 6px; }
+    .tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--sec);
+      border-top: 1px solid rgba(255,255,255,.08); }
+    .tabs button { flex: 1; background: none; color: var(--hint); border-radius: 0; font-weight: 500;
+      padding: 10px 4px; font-size: 12px; }
+    .tabs button.active { color: var(--link); }
+    .hidden { display: none; }
+    .plan { border: 1px solid rgba(255,255,255,.10); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+    .plan .price { font-size: 20px; font-weight: 700; }
+    .err { margin: 16px; color: #ff6b6b; }
+    .spin { text-align: center; color: var(--hint); margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="spin">Loading…</div></div>
+
+  <div class="tabs">
+    <button data-tab="home" class="active">🏠 Home</button>
+    <button data-tab="plans">📋 Plans</button>
+    <button data-tab="devices">📱 Devices</button>
+    <button data-tab="ref">🎁 Refer</button>
+  </div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+const BASE = "/webapp/api";
+const AUTH = "tma " + (tg.initData || "");
+let ME = null, PLANS = null, TAB = "home";
+
+async function api(path, opts = {}) {
+  const r = await fetch(BASE + path, {
+    method: opts.method || "GET",
+    headers: { "Authorization": AUTH, "Content-Type": "application/json" },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+const el = (h) => { const d = document.createElement("div"); d.innerHTML = h; return d.firstElementChild; };
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString() : "—";
+
+function setTab(t) {
+  TAB = t;
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === t));
+  render();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+
+function render() {
+  const root = document.getElementById("root");
+  if (!ME) return;
+  if (TAB === "home") root.innerHTML = viewHome();
+  else if (TAB === "plans") root.innerHTML = viewPlans();
+  else if (TAB === "devices") root.innerHTML = viewDevices();
+  else if (TAB === "ref") root.innerHTML = viewRef();
+  wire();
+}
+
+function viewHome() {
+  const s = ME.subscription;
+  const sub = s
+    ? `<div class="row"><span class="muted">Plan</span><b>${esc(s.plan)}</b></div>
+       <div class="row"><span class="muted">Status</span><span class="pill ok">${esc(s.status)}</span></div>
+       <div class="row"><span class="muted">Expires</span><b>${fmtDate(s.expires_at)}</b></div>`
+    : `<div class="muted">No active subscription yet.</div>
+       <button class="block" data-go="plans">📋 Choose a plan</button>`;
+  const key = ME.key_prefix
+    ? `<div class="row"><span class="muted">API key</span><code>${esc(ME.key_prefix)}…</code></div>
+       ${ME.key_flagged ? '<div class="warn">⚠️ flagged for review</div>' : ''}`
+    : `<div class="muted">No API key yet — subscribe to get one.</div>`;
+  return `<h2>📊 Subscription</h2><div class="card">${sub}</div>
+          <h2>🔑 API key</h2><div class="card">${key}</div>`;
+}
+
+function viewPlans() {
+  if (!PLANS) { loadPlans(); return `<div class="spin">Loading plans…</div>`; }
+  const methodBtns = (name) => PLANS.methods.map(m => {
+    const label = { stars: "⭐ Stars", card: "💳 Card", crypto: "🪙 Crypto" }[m] || m;
+    return `<button class="sec" data-buy="${esc(name)}" data-method="${m}">${label}</button>`;
+  }).join(" ");
+  const cards = PLANS.plans.filter(p => !p.is_trial).map(p => `
+    <div class="plan">
+      <div class="row"><b>${esc(p.name)}</b><span class="price">$${esc(p.price)}</span></div>
+      <div class="muted">${p.duration_days} days · ${p.max_devices} device(s)</div>
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">${methodBtns(p.name)}</div>
+    </div>`).join("");
+  return `<h2>📋 Plans</h2><div class="card">
+    <input id="code" placeholder="Promo code (optional)" autocapitalize="characters" />
+    <div style="margin-top:12px">${cards}</div></div>`;
+}
+
+function viewDevices() {
+  if (!ME.devices.length)
+    return `<h2>📱 Devices</h2><div class="card muted">No devices registered yet.</div>`;
+  const rows = ME.devices.map(d => `
+    <div class="row"><span><code>${esc(d.fingerprint)}…</code> <span class="pill">${esc(d.status)}</span></span>
+    <button class="sec" data-rm="${d.id}">Remove</button></div>`).join("");
+  return `<h2>📱 Devices</h2><div class="card">${rows}</div>`;
+}
+
+function viewRef() {
+  const r = ME.referrals;
+  return `<h2>🎁 Referrals</h2><div class="card">
+    <div class="muted">Earn <b>${r.rate_pct}%</b> when someone you invite subscribes.</div>
+    <div class="row"><span class="muted">Invited</span><b>${r.invited}</b></div>
+    <div class="row"><span class="muted">Paid</span><b>${r.qualified}</b></div>
+    <div class="row"><span class="muted">Earned</span><b>${esc(r.earned)} USD</b></div>
+    ${r.invite_link ? `<button class="block" id="share">📣 Share invite link</button>` : ''}
+  </div>`;
+}
+
+function wire() {
+  document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => setTab(b.dataset.go));
+  document.querySelectorAll("[data-buy]").forEach(b => b.onclick = () => buy(b.dataset.buy, b.dataset.method));
+  document.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => removeDevice(b.dataset.rm));
+  const share = document.getElementById("share");
+  if (share) share.onclick = () => {
+    const url = ME.referrals.invite_link;
+    tg.openTelegramLink("https://t.me/share/url?url=" + encodeURIComponent(url) +
+      "&text=" + encodeURIComponent("Join me on this arbitrage tool 🚀"));
+  };
+}
+
+async function buy(plan, method) {
+  const code = (document.getElementById("code") || {}).value || "";
+  tg.MainButton.showProgress();
+  try {
+    const res = await api("/buy", { method: "POST", body: { plan, method, code } });
+    if (res.status === "granted") { tg.showAlert("✅ Activated " + res.plan + "!"); await reload(); }
+    else if (res.kind === "invoice") tg.openInvoice(res.url, (st) => { if (st === "paid") setTimeout(reload, 1500); });
+    else if (res.kind === "crypto") tg.openLink(res.url);
+  } catch (e) { tg.showAlert("Could not start checkout. Try again."); }
+  finally { tg.MainButton.hideProgress(); }
+}
+
+async function removeDevice(id) {
+  try { await api("/devices/" + id + "/remove", { method: "POST" }); await reload(); }
+  catch (e) { tg.showAlert("Could not remove device."); }
+}
+
+async function loadPlans() { try { PLANS = await api("/plans"); render(); } catch (e) {} }
+async function reload() { ME = await api("/me"); render(); }
+
+(async () => {
+  try { ME = await api("/me"); render(); }
+  catch (e) {
+    document.getElementById("root").innerHTML =
+      `<div class="err">Couldn't load your data. Open this from inside Telegram.</div>`;
+  }
+})();
+</script>
+</body>
+</html>

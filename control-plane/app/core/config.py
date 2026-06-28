@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     referral_rate_standard: float = 0.20
     referral_rate_blogger: float = 0.30
 
+    # Telegram Mini App (in-Telegram web dashboard). Set webapp_url to the public
+    # HTTPS URL once hosted; the bot then shows a "Open App" menu button.
+    webapp_url: str = ""
+    webapp_init_data_ttl: int = 86400  # max age (s) of a signed initData payload
+
     # Expiry reminders — DM users before their subscription lapses.
     expiry_reminders_enabled: bool = True
     expiry_reminder_days: str = "3,1"   # send a nudge at each of these days-left bands

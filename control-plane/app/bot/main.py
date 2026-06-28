@@ -11,7 +11,14 @@ import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
+from aiogram.types import (
+    BotCommand,
+    BotCommandScopeChat,
+    BotCommandScopeDefault,
+    MenuButtonCommands,
+    MenuButtonWebApp,
+    WebAppInfo,
+)
 
 from app.bot import i18n
 from app.bot.handlers import admin, client, payments
@@ -99,6 +106,21 @@ async def _set_commands(bot: Bot) -> None:
         log.warning("could not set command menu: %s", exc)
 
 
+async def _set_menu_button(bot: Bot) -> None:
+    """Point the chat menu button at the Mini App when WEBAPP_URL is set; else
+    fall back to the native "/" commands menu. Best-effort — never block startup."""
+    try:
+        if settings.webapp_url:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="🚀 Open App", web_app=WebAppInfo(url=settings.webapp_url)))
+            log.info("menu button → Mini App (%s)", settings.webapp_url)
+        else:
+            await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    except Exception as exc:  # noqa: BLE001 - cosmetic; never block startup
+        log.warning("could not set menu button: %s", exc)
+
+
 async def main() -> None:
     configure_logging()
     if not settings.bot_token or settings.bot_token == "CHANGE_ME":
@@ -112,6 +134,7 @@ async def main() -> None:
     )
     dp = build_dispatcher()
     await _set_commands(bot)
+    await _set_menu_button(bot)
     log.info("bot starting (long polling)")
     await dp.start_polling(bot)
 
