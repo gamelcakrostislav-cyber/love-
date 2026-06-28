@@ -78,6 +78,13 @@ def digest(user_id: int) -> str:
     return f"digest:{user_id}"
 
 
+def club_invited(user_id: int) -> str:
+    """Cooldown marker: a join-request link was DM'd to this subscriber. Suppresses
+    re-inviting them every sweep while they decide; expiry gives a bounded retry so
+    a transient DM failure (or an undelivered link) self-corrects without flooding."""
+    return f"club:invited:{user_id}"
+
+
 def milestone(user_id: int) -> str:
     """Highest referral milestone already celebrated for a referrer."""
     return f"growth:milestone:{user_id}"

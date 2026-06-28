@@ -16,26 +16,36 @@ the chat id in `.env`.
 ## 1. Exclusive subscriber group
 
 A private group only paying subscribers can be in. The bot DMs each active
-subscriber a **one-time** invite link and **removes** them when their sub lapses
-(it bans then unbans, so a renewing user can rejoin with a fresh link).
+subscriber a **join-request** invite link and **approves the join only if they
+have an active subscription**; it **removes** (bans then unbans) anyone whose sub
+lapses, so a renewing user can rejoin.
+
+Why join-request and not a one-time link: Telegram's `member_limit` caps how
+*many* people use a link, not *who* — a forwarded link would let the first
+stranger in. With `creates_join_request=True` the bot vets every joiner, so a
+leaked link is useless to a non-subscriber.
 
 **Setup**
 1. Create a **private group** (or supergroup).
 2. Add your bot and **promote it to admin** with at least:
-   *Invite users via link* and *Ban users*.
+   *Add users* / *Invite users via link*, and *Ban users*.
 3. Put the group id in `.env`:
    ```
    CLIENT_GROUP_ID=-1001234567890
-   # CLIENT_GROUP_INVITE_TTL=86400   # optional: link expires after N seconds
+   # CLIENT_GROUP_INVITE_TTL=86400      # optional: link expires after N seconds
+   # CLIENT_GROUP_INVITE_COOLDOWN=3600  # wait before re-inviting an un-joined subscriber
    ```
-4. Restart the worker: `docker compose up -d --force-recreate worker`.
+4. Restart both services so the worker sweep and the bot's join handler load:
+   `docker compose up -d --force-recreate worker bot`.
 
-The worker syncs membership **every minute**: new subscribers get invited, lapsed
-ones get removed. No payment-flow wiring needed — it's driven purely by
-subscription state, so it self-corrects after any missed grant.
+The worker syncs membership **every minute**: active subscribers who aren't in the
+group get a join-request link DM'd (re-tried after the cooldown if undelivered),
+and lapsed members get removed. Membership truth is the real group roster — the
+bot flips it on the actual join/leave event, not when a link is sent — so a missed
+DM or a voluntary leave self-corrects. No payment-flow wiring needed.
 
-> Telegram caveat: the bot can only remove members it can see — keep it an admin.
-> The one-time link (`member_limit=1`) can't be shared; each subscriber gets their own.
+> Telegram caveat: the bot must stay an admin — it can only approve joins, see
+> members, and remove them while it holds those rights.
 
 ---
 

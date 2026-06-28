@@ -21,7 +21,7 @@ from aiogram.types import (
 )
 
 from app.bot import i18n
-from app.bot.handlers import admin, client, payments
+from app.bot.handlers import admin, client, club_join, payments
 from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
@@ -37,6 +37,10 @@ def build_dispatcher() -> Dispatcher:
     # Payments before the client catch-all so pre_checkout / successful_payment
     # and the pay:* callbacks are handled here.
     dp.include_router(payments.router)
+    # Subscriber-group gatekeeper: chat_join_request + chat_member updates (distinct
+    # update types, so order vs the message routers doesn't matter). Registering it
+    # makes aiogram opt into those update types in long polling automatically.
+    dp.include_router(club_join.router)
     dp.include_router(client.router)
     return dp
 

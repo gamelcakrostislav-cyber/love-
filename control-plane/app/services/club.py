@@ -1,14 +1,26 @@
 """Exclusive subscriber group — gate a private Telegram group on a live sub.
 
-A worker sweep keeps the group's membership in lockstep with subscriptions:
-  - every active subscriber who hasn't been invited yet gets a fresh, one-time
-    invite link DM'd to them (member_limit=1, so the link can't be shared);
-  - every member whose subscription has lapsed is removed (ban → unban, so they
-    can rejoin with a new link if they renew).
+Membership truth is the actual group roster, kept in lockstep with subscriptions
+by two cooperating parts:
 
-`user.club_member` tracks who we've granted access to, so renewals don't re-spam
-links and a single transient Bot serves the whole sweep. Decoupling this from the
-payment path means it's robust to a missed grant and uniformly enforces expiry.
+  - the worker SWEEP (this module's `sweep`) DMs every active subscriber who
+    isn't in the group a *join-request* invite link, and removes (bans) members
+    whose subscription has lapsed;
+  - the bot's join/membership HANDLERS (app/bot/handlers/club_join.py) approve a
+    join request only when the requester has an active subscription, and flip
+    `user.club_member` on the real `chat_member` join/leave event.
+
+Why join-request links and not `member_limit=1` one-time links: Telegram's
+`member_limit` caps how MANY people use a link, not WHO — a forwarded/leaked link
+would let the first stranger into the paid group. `creates_join_request=True`
+makes the bot vet every joiner, so a leaked link is useless to a non-subscriber.
+
+`user.club_member` therefore means "currently in the group" (set by the join/leave
+event), NOT "we sent a link". The sweep never sets it; a Redis cooldown marker
+(`redis_keys.club_invited`) tracks "invite sent, awaiting join" so we don't re-DM
+the link every minute, and its expiry gives a bounded retry if the link never
+landed. Decoupling all this from the payment path means it self-corrects after a
+missed grant and uniformly enforces expiry.
 """
 
 from __future__ import annotations
@@ -24,11 +36,14 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot import i18n
+from app.core import redis_keys
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.redis import redis_client
 from app.models.enums import SubscriptionStatus
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.services import users
 from app.services.audit import record_audit
 
 log = get_logger("club")
@@ -60,7 +75,7 @@ def _active_sub(now: datetime):
 async def to_invite(
     db: AsyncSession, now: datetime | None = None, *, limit: int = _SWEEP_LIMIT
 ) -> list[User]:
-    """Active subscribers who haven't been invited to the group yet."""
+    """Active subscribers not currently in the group."""
     now = now or datetime.now(UTC)
     return list(await db.scalars(
         select(User).where(User.club_member.is_(False), _active_sub(now)).limit(limit)))
@@ -87,6 +102,44 @@ async def _has_active_sub(db: AsyncSession, user_id: int, now: datetime) -> bool
     ) is not None
 
 
+async def admit_join_request(db: AsyncSession, telegram_id: int, now: datetime | None = None) -> bool:
+    """Whether this Telegram user should be let into the group: they must map to a
+    known user with an active subscription. This is the gate that makes a leaked
+    join-request link worthless to a non-subscriber."""
+    now = now or datetime.now(UTC)
+    user = await users.get_by_telegram_id(db, telegram_id)
+    if user is None:
+        return False
+    return await _has_active_sub(db, user.id, now)
+
+
+async def set_membership(db: AsyncSession, telegram_id: int, *, joined: bool) -> None:
+    """Record the real group-membership state from a join/leave event. Idempotent:
+    only writes (and audits) on an actual change, so duplicate events and the
+    sweep's own removal write don't double-log. Clears the invite cooldown on join
+    so a user who later re-lapses and renews is re-invited promptly."""
+    user = await users.get_by_telegram_id(db, telegram_id)
+    if user is None:
+        return
+    if joined:
+        await redis_client.delete(redis_keys.club_invited(user.id))
+    if user.club_member == joined:
+        return  # already in the desired state — nothing to write/audit
+    user.club_member = joined
+    await record_audit(
+        db, actor="system", action="club_joined" if joined else "club_left", target=str(user.id))
+    await db.commit()
+
+
+async def _recently_invited(user_id: int) -> bool:
+    return bool(await redis_client.exists(redis_keys.club_invited(user_id)))
+
+
+async def _mark_invited(user_id: int) -> None:
+    await redis_client.set(
+        redis_keys.club_invited(user_id), "1", ex=max(60, settings.client_group_invite_cooldown))
+
+
 @asynccontextmanager
 async def _bot():
     bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -96,9 +149,15 @@ async def _bot():
         await bot.session.close()
 
 
-async def _one_time_link(bot: Bot) -> str | None:
+async def _join_request_link(bot: Bot) -> str | None:
+    # creates_join_request=True (mutually exclusive with member_limit): anyone can
+    # tap the link, but the bot's chat_join_request handler vets each joiner.
     try:
-        kwargs: dict = {"chat_id": settings.client_group_id, "member_limit": 1, "name": "subscriber"}
+        kwargs: dict = {
+            "chat_id": settings.client_group_id,
+            "creates_join_request": True,
+            "name": "subscriber",
+        }
         if settings.client_group_invite_ttl > 0:
             kwargs["expire_date"] = int(datetime.now(UTC).timestamp()) + settings.client_group_invite_ttl
         link = await bot.create_chat_invite_link(**kwargs)
@@ -137,11 +196,11 @@ async def _revoke_link(bot: Bot, link: str) -> None:
 async def sweep(db: AsyncSession) -> tuple[int, int]:
     """Invite new active subscribers, remove lapsed ones. Returns (invited, removed).
 
-    Each membership change is committed per-user right after its irreversible
-    Telegram action, so a later failure can never roll a flag back while the group
-    change persists (no re-invite spam). Removal flips the flag the moment the ban
-    lands — independent of the follow-up unban — so a partial failure can't lock a
-    renewing customer out."""
+    Invite path sets a Redis cooldown (not club_member) so a sent-but-not-yet-joined
+    or undelivered link isn't re-DM'd every minute; club_member flips to True only on
+    the real join event. Removal flips club_member=False the moment the ban lands —
+    independent of the follow-up unban — so a partial failure can't lock a renewing
+    customer out."""
     if not is_enabled():
         return (0, 0)
     now = datetime.now(UTC)
@@ -153,22 +212,25 @@ async def sweep(db: AsyncSession) -> tuple[int, int]:
     invited = removed = 0
     async with _bot() as bot:
         for user in invite_users:
+            if await _recently_invited(user.id):
+                continue  # link sent recently — wait for them to join or for cooldown
             if not await _has_active_sub(db, user.id, now):
                 continue  # renewed-then-lapsed in the snapshot window — skip
-            await _unban(bot, user.telegram_id)  # clear any stale ban so the link works
-            link = await _one_time_link(bot)
+            await _unban(bot, user.telegram_id)  # clear any stale ban so they can request to join
+            link = await _join_request_link(bot)
             if not link:
-                continue  # couldn't mint a link → retry next sweep (nothing committed)
+                continue  # couldn't mint a link → retry next sweep (no cooldown set)
             lang = i18n.normalize(user.language)
             try:
                 await bot.send_message(user.telegram_id, i18n.t(lang, "club_invite", link=link))
             except Exception as exc:  # noqa: BLE001 - e.g. the user blocked the bot
                 log.warning("club invite DM to %s failed: %s", user.telegram_id, exc)
-                await _revoke_link(bot, link)  # don't leave an orphan one-time link
-            # Mark invited regardless of DM delivery so we never re-mint a link.
-            user.club_member = True
+                await _revoke_link(bot, link)  # don't leave an orphan link
+            # Cooldown regardless of delivery: a blocked user is retried once per
+            # cooldown, not every sweep. club_member stays False until they join.
+            await _mark_invited(user.id)
             await record_audit(db, actor="system", action="club_invited", target=str(user.id))
-            await db.commit()
+            await db.commit()  # persist the audit row (symmetric with the remove path)
             invited += 1
             await asyncio.sleep(_PACE_SECONDS)
 

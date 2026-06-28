@@ -1,4 +1,10 @@
-"""Drive club.sweep() through every branch with a fake transient Bot."""
+"""Drive club.sweep() through every branch with a fake transient Bot.
+
+New model: the sweep DMs a join-request link and sets a Redis cooldown marker; it
+never sets club_member (that flips only on the real join/leave event, covered in
+test_club_join.py). So the invite-path assertions check the cooldown + the
+join-request link, and that club_member stays False.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +13,9 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy import select
 
+from app.core import redis_keys
 from app.core.config import settings
+from app.core.redis import redis_client
 from app.models.user import User
 from app.services import club
 from tests.factories import make_plan, make_subscription, make_user
@@ -27,8 +35,9 @@ class FakeBot:
         self.fail_send = False
         self.fail_ban = False
 
-    async def create_chat_invite_link(self, *, chat_id, member_limit, name, **kw):
-        self.invite_calls.append({"chat_id": chat_id, "member_limit": member_limit, "name": name})
+    async def create_chat_invite_link(self, *, chat_id, creates_join_request=False, name=None, **kw):
+        self.invite_calls.append(
+            {"chat_id": chat_id, "creates_join_request": creates_join_request, "name": name})
         if self.fail_create:
             raise RuntimeError("mint boom")
         return types.SimpleNamespace(invite_link="https://t.me/+abc")
@@ -68,6 +77,10 @@ async def _club_member(db, telegram_id: int) -> bool:
     return await db.scalar(select(User.club_member).where(User.telegram_id == telegram_id))
 
 
+async def _invited(user_id: int) -> bool:
+    return bool(await redis_client.exists(redis_keys.club_invited(user_id)))
+
+
 async def test_sweep_disabled_does_nothing(db, monkeypatch):
     monkeypatch.setattr(settings, "bot_token", "CHANGE_ME")
     constructed = False
@@ -93,14 +106,16 @@ async def test_sweep_happy_invite(db, monkeypatch):
     invited, removed = await club.sweep(db)
 
     assert (invited, removed) == (1, 0)
-    assert await _club_member(db, 9001) is True
+    # sweep does NOT mark them a member — that waits for the real join event.
+    assert await _club_member(db, 9001) is False
+    assert await _invited(user.id) is True              # cooldown set so we don't re-DM
     assert len(bot.invite_calls) == 1
-    assert bot.invite_calls[0]["member_limit"] == 1
+    assert bot.invite_calls[0]["creates_join_request"] is True
     assert len(bot.send_calls) == 1
     assert bot.revoke_calls == []
 
 
-async def test_sweep_invite_dm_fails_still_marks_member(db, monkeypatch):
+async def test_sweep_invite_dm_fails_still_sets_cooldown(db, monkeypatch):
     bot = FakeBot()
     bot.fail_send = True
     _enable(monkeypatch, bot)
@@ -112,9 +127,10 @@ async def test_sweep_invite_dm_fails_still_marks_member(db, monkeypatch):
     invited, removed = await club.sweep(db)
 
     assert (invited, removed) == (1, 0)
-    assert await _club_member(db, 9101) is True
+    assert await _club_member(db, 9101) is False
+    assert await _invited(user.id) is True              # cooldown so a blocked user isn't re-DM'd every sweep
     assert len(bot.send_calls) == 1
-    assert len(bot.revoke_calls) == 1
+    assert len(bot.revoke_calls) == 1                   # orphan link revoked
 
 
 async def test_sweep_link_mint_fails_skips_user(db, monkeypatch):
@@ -130,8 +146,24 @@ async def test_sweep_link_mint_fails_skips_user(db, monkeypatch):
 
     assert (invited, removed) == (0, 0)
     assert await _club_member(db, 9201) is False
+    assert await _invited(user.id) is False             # nothing committed → retry next sweep
     # _unban runs before the mint attempt, so the stale-ban clear still happened.
     assert len(bot.unban_calls) == 1
+    assert bot.send_calls == []
+
+
+async def test_sweep_skips_recently_invited(db, monkeypatch):
+    bot = _enable(monkeypatch, FakeBot())
+    plan = await make_plan(db)
+    user = await make_user(db, telegram_id=9251)
+    await make_subscription(db, user=user, plan=plan, days_left=10)
+    await db.commit()
+    await club._mark_invited(user.id)                   # pretend we DM'd them last sweep
+
+    invited, removed = await club.sweep(db)
+
+    assert (invited, removed) == (0, 0)
+    assert bot.invite_calls == []                       # no second link minted
     assert bot.send_calls == []
 
 
@@ -205,6 +237,7 @@ async def test_sweep_throttles_to_limit(db, monkeypatch):
     invited, removed = await club.sweep(db)
 
     assert (invited, removed) == (1, 0)
-    members = await db.scalars(select(User.telegram_id).where(User.club_member.is_(True)))
-    assert len(list(members)) == 1
     assert len(bot.invite_calls) == 1
+    # exactly one of the two got a cooldown marker this sweep
+    flags = [await _invited(one.id), await _invited(two.id)]
+    assert flags.count(True) == 1

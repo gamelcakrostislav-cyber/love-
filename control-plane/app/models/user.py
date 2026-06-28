@@ -30,8 +30,9 @@ class User(Base):
         Boolean, default=False, server_default="false", nullable=False
     )
 
-    # True once the bot has invited this user to the exclusive subscriber group;
-    # flipped back to False when their access is revoked on expiry.
+    # True while the user is actually in the exclusive subscriber group. Set by the
+    # real chat_member join/leave event (or a join-request approval), cleared on
+    # removal — never set merely by DM'ing an invite link.
     club_member: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
