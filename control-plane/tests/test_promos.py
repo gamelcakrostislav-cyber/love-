@@ -70,8 +70,8 @@ def test_parse_discount_accepts_forgiving_forms():
 
 
 async def test_update_changes_only_given_fields(db):
-    promo = await promos.create(db, code="EDITME", discount_type=DISCOUNT_PERCENT,
-                                discount_value=Decimal("20"))
+    await promos.create(db, code="EDITME", discount_type=DISCOUNT_PERCENT,
+                        discount_value=Decimal("20"))
     await db.commit()
     updated = await promos.update(db, code="editme", discount_value=Decimal("30"))
     await db.commit()
