@@ -79,6 +79,17 @@ class Settings(BaseSettings):
     webapp_url: str = ""
     webapp_init_data_ttl: int = 86400  # max age (s) of a signed initData payload
 
+    # Exclusive subscriber group — a private group the bot gates on an active
+    # subscription. Set to the group's chat id (e.g. -1001234567890); the bot
+    # must be an admin there with invite + ban permissions. 0 = disabled.
+    client_group_id: int = 0
+    client_group_invite_ttl: int = 0   # seconds the one-time link stays valid (0 = no expiry)
+
+    # Feedback inbox — a private group/channel the bot posts user feedback to so
+    # admins can track it in one place. The bot must be a member/admin there.
+    # 0 = fall back to DMing each admin (the previous behaviour).
+    feedback_channel_id: int = 0
+
     # Expiry reminders — DM users before their subscription lapses.
     expiry_reminders_enabled: bool = True
     expiry_reminder_days: str = "3,1"   # send a nudge at each of these days-left bands

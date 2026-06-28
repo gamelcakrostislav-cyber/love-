@@ -44,6 +44,7 @@ from app.models.referral import Commission, Referral
 from app.services import devices as devices_svc
 from app.services import (
     bot_content,
+    feedback_inbox,
     growth,
     handoff,
     keys,
@@ -738,9 +739,8 @@ async def support_or_relay(message: Message) -> None:
             if u is not None:
                 db.add(Feedback(user_id=u.id, text=text[:4000]))
                 await db.commit()
-        uname = f"@{message.from_user.username}" if message.from_user.username else "(no username)"
-        await handoff.notify_admins(
-            f"💡 <b>Feedback</b> from {uname} (id <code>{message.from_user.id}</code>):\n{text}")
+        await feedback_inbox.route(
+            text, telegram_id=message.from_user.id, username=message.from_user.username)
         await message.answer(i18n.t(lang, "feedback_thanks"), parse_mode="HTML")
         return
 

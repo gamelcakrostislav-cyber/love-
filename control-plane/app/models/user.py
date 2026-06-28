@@ -30,6 +30,12 @@ class User(Base):
         Boolean, default=False, server_default="false", nullable=False
     )
 
+    # True once the bot has invited this user to the exclusive subscriber group;
+    # flipped back to False when their access is revoked on expiry.
+    club_member: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+
     # Self-referential: who invited this user (nullable).
     referred_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

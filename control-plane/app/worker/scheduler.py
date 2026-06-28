@@ -15,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import configure_logging, get_logger
-from app.services import alerts, growth, notifications, notion_sync, reminders, revocation
+from app.services import alerts, club, growth, notifications, notion_sync, reminders, revocation
 
 log = get_logger("worker")
 
@@ -60,6 +60,17 @@ async def notifications_tick() -> None:
             log.info("notifications: %d drip, %d digest, %d milestone", drip, digest, mile)
     except Exception as exc:  # noqa: BLE001 - notifications must never crash the worker
         log.warning("notifications sweep failed: %s", exc)
+
+
+async def club_tick() -> None:
+    try:
+        async with SessionFactory() as db:
+            invited, removed = await club.sweep(db)
+            await db.commit()
+        if invited or removed:
+            log.info("club: %d invited, %d removed", invited, removed)
+    except Exception as exc:  # noqa: BLE001 - club sync must never crash the worker
+        log.warning("club sweep failed: %s", exc)
 
 
 async def notion_tick() -> None:
@@ -113,6 +124,13 @@ async def main() -> None:
             next_run_time=datetime.now(UTC), max_instances=1, coalesce=True,
         )
         log.info("admin abuse alerts enabled — sweep every 2 min")
+
+    if club.is_enabled():
+        scheduler.add_job(
+            club_tick, trigger="interval", minutes=1,
+            next_run_time=datetime.now(UTC), max_instances=1, coalesce=True,
+        )
+        log.info("subscriber group enabled — invite/remove sweep every minute")
 
     if notion_sync.is_enabled():
         scheduler.add_job(
