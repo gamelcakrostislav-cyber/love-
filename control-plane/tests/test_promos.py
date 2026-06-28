@@ -52,6 +52,48 @@ def test_describe():
         PromoCode(discount_type=DISCOUNT_FIXED, discount_value=Decimal("10"))) == "10 USD off"
 
 
+def test_parse_discount_accepts_forgiving_forms():
+    assert promos.parse_discount(["20%"]) == (DISCOUNT_PERCENT, Decimal("20"), 1)
+    assert promos.parse_discount(["$10"]) == (DISCOUNT_FIXED, Decimal("10"), 1)
+    assert promos.parse_discount(["10$"]) == (DISCOUNT_FIXED, Decimal("10"), 1)
+    assert promos.parse_discount(["pct", "20"]) == (DISCOUNT_PERCENT, Decimal("20"), 2)
+    assert promos.parse_discount(["fixed", "10"]) == (DISCOUNT_FIXED, Decimal("10"), 2)
+    assert promos.parse_discount(["20", "%"]) == (DISCOUNT_PERCENT, Decimal("20"), 2)
+    assert promos.parse_discount(["10", "fixed"]) == (DISCOUNT_FIXED, Decimal("10"), 2)
+    # consumed count = 1 so trailing tokens (plan/max/days) stay for the caller
+    assert promos.parse_discount(["20%", "monthly", "100"]) == (DISCOUNT_PERCENT, Decimal("20"), 1)
+    # ambiguous / unparseable
+    assert promos.parse_discount(["20"]) is None       # bare number needs % or $
+    assert promos.parse_discount([]) is None
+    assert promos.parse_discount(["abc"]) is None
+    assert promos.parse_discount(["pct"]) is None       # type word, no number
+
+
+async def test_update_changes_only_given_fields(db):
+    promo = await promos.create(db, code="EDITME", discount_type=DISCOUNT_PERCENT,
+                                discount_value=Decimal("20"))
+    await db.commit()
+    updated = await promos.update(db, code="editme", discount_value=Decimal("30"))
+    await db.commit()
+    assert updated.discount_value == Decimal("30")
+    assert updated.discount_type == DISCOUNT_PERCENT   # untouched
+    assert updated.is_active is True                   # untouched
+    # toggle active, leave the rest
+    await promos.update(db, code="EDITME", is_active=False)
+    await db.commit()
+    refreshed = await promos.get(db, "EDITME")
+    assert refreshed.is_active is False and refreshed.discount_value == Decimal("30")
+    # clearing vs setting limits
+    await promos.update(db, code="EDITME", max_redemptions=50)
+    await db.commit()
+    assert (await promos.get(db, "EDITME")).max_redemptions == 50
+    await promos.update(db, code="EDITME", max_redemptions=None)
+    await db.commit()
+    assert (await promos.get(db, "EDITME")).max_redemptions is None
+    # unknown code → None
+    assert await promos.update(db, code="NOPE", is_active=False) is None
+
+
 # ─── Validation (DB) ──────────────────────────────────────────────────────────
 async def test_quote_valid_returns_discounted_total(db):
     plan = await make_plan(db)  # 49.00

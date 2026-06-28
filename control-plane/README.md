@@ -201,7 +201,8 @@ Admin commands (Telegram ids in `ADMIN_IDS`):
 | `/stats` | active users, sessions, paid revenue, flagged + abuse counts |
 | `/grant <telegram_id> <plan>` | grant/extend access (reuses webhook activation) |
 | `/revoke <telegram_id>` | revoke subscription, disable keys, kill sessions |
-| `/promonew <code> <pct\|fixed> <value> [plan] [max] [days]` | create a discount code |
+| `/promonew <code> <20%\|$10> [plan=] [max=] [days=]` | create a discount code (forgiving syntax) |
+| `/promoedit <code> …` | modify a code: amount, `plan=`, `max=`, `days=`, or `on`/`off` |
 | `/promos` | list discount codes with usage |
 | `/promooff <code>` | deactivate a discount code |
 | `/flags` | review flagged keys + recent abuse events |

@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from aiogram import Router
 from aiogram.filters import BaseFilter, Command, CommandObject
@@ -27,7 +28,7 @@ from app.models.enums import PaymentStatus, SubscriptionStatus
 from app.models.feedback import Feedback
 from app.models.payment import Payment
 from app.models.plan import Plan
-from app.models.promo_code import DISCOUNT_FIXED, DISCOUNT_PERCENT
+from app.models.promo_code import DISCOUNT_PERCENT
 from app.models.referral import Commission, Referral
 from app.models.session import Session
 from app.models.subscription import Subscription
@@ -230,7 +231,8 @@ async def admin_help_cmd(message: Message) -> None:
         "/notion [sync] — Notion CRM status / sync now\n"
         "/broadcast &lt;msg&gt; — message every user\n"
         "/push &lt;segment&gt; &lt;msg&gt; — message a segment (opted-in)\n"
-        "/promonew &lt;code&gt; &lt;pct|fixed&gt; &lt;value&gt; [plan] [max] [days] — new code\n"
+        "/promonew &lt;code&gt; &lt;20%|$10&gt; [plan=] [max=] [days=] — new code\n"
+        "/promoedit &lt;code&gt; … — change a code (amount/plan/max/days/on|off)\n"
         "/promos — list discount codes\n"
         "/promooff &lt;code&gt; — deactivate a code\n"
         "/feedback — view recent client feedback\n"
@@ -336,81 +338,129 @@ async def export_cmd(message: Message) -> None:
     await message.answer_document(doc, caption=f"📑 {len(users)} customer(s) exported.")
 
 
+# Words that mean "no restriction" for plan / cap / expiry (friendly clearing).
+_CLEAR_WORDS = {"*", "any", "none", "off", "unlimited", "never", "0"}
+
+
+@dataclass
+class _PromoArgs:
+    code: str | None = None
+    discount_type: str | None = None
+    value: Decimal | None = None
+    plan: str | None = None
+    cap: str | None = None      # raw; validated by _limit_arg
+    days: str | None = None     # raw; validated by _limit_arg
+    active: bool | None = None  # set by a standalone on/off token
+
+
+def _parse_promo_args(arg_str: str) -> _PromoArgs:
+    """Forgiving parse of the admin promo syntax. Accepts the amount as 20% / $10
+    / 'pct 20' / 'fixed 10', named flags (plan=/max=/days=) in any order, a
+    standalone on/off, and legacy positional [plan] [max] [days]."""
+    flags: dict[str, str] = {}
+    positional: list[str] = []
+    active: bool | None = None
+    for t in arg_str.split():
+        low = t.lower()
+        if low in ("on", "off") and "=" not in t:
+            active = low == "on"
+        elif "=" in t and not t.startswith("="):
+            k, v = t.split("=", 1)
+            flags[k.lower().strip()] = v.strip()
+        else:
+            positional.append(t)
+    out = _PromoArgs(active=active)
+    if not positional:
+        out.plan, out.cap, out.days = flags.get("plan"), flags.get("max"), flags.get("days")
+        return out
+    out.code = positional[0]
+    rest = positional[1:]
+    parsed = promos.parse_discount(rest)
+    leftover = rest
+    if parsed is not None:
+        out.discount_type, out.value, consumed = parsed
+        leftover = rest[consumed:]
+    out.plan = flags.get("plan") or (leftover[0] if len(leftover) >= 1 else None)
+    out.cap = flags.get("max") or (leftover[1] if len(leftover) >= 2 else None)
+    out.days = flags.get("days") or (leftover[2] if len(leftover) >= 3 else None)
+    return out
+
+
+def _limit_arg(raw: str | None) -> tuple[str, int | None]:
+    """Interpret a max/days argument → ('keep'|'clear'|'set'|'bad', value)."""
+    if raw is None:
+        return ("keep", None)
+    if raw.lower() in _CLEAR_WORDS:
+        return ("clear", None)
+    if raw.isdigit() and int(raw) > 0:
+        return ("set", int(raw))
+    return ("bad", None)
+
+
+def _promo_summary(promo, plan_name: str | None) -> str:
+    desc = promos.describe(promo)
+    scope = plan_name or "any plan"
+    cap = f"{promo.max_redemptions} uses" if promo.max_redemptions else "unlimited"
+    exp = f"expires {promo.expires_at:%Y-%m-%d}" if promo.expires_at else "no expiry"
+    status = "" if promo.is_active else " · OFF"
+    return f"<b>{promo.code}</b> — {desc}, {scope}, {cap}, {exp}{status}"
+
+
 _PROMO_NEW_USAGE = (
-    "Usage: /promonew &lt;code&gt; &lt;pct|fixed&gt; &lt;value&gt; "
-    "[plan|*] [max|*] [days|*]\n"
-    "e.g. <code>/promonew SAVE20 pct 20</code> — 20% off any plan, no limit\n"
-    "e.g. <code>/promonew WELCOME10 fixed 10 monthly 100 30</code> — $10 off "
-    "monthly, 100 uses, expires in 30 days"
+    "🏷 <b>Create a discount code</b>\n"
+    "<code>/promonew CODE AMOUNT [plan=…] [max=…] [days=…]</code>\n\n"
+    "<b>AMOUNT</b> — any of: <code>20%</code> · <code>$10</code> · "
+    "<code>pct 20</code> · <code>fixed 10</code>\n"
+    "<b>Optional</b> (any order, omit to skip): <code>plan=monthly</code> · "
+    "<code>max=100</code> · <code>days=30</code>\n\n"
+    "Examples:\n"
+    "• <code>/promonew SAVE20 20%</code> — 20% off everything, no limit\n"
+    "• <code>/promonew WELCOME10 $10 plan=monthly max=100 days=30</code>"
 )
 
 
 @router.message(Command("promonew"))
 async def promonew_cmd(message: Message, command: CommandObject) -> None:
-    """Create a discount code. Value is a percent (pct) or a fixed amount (fixed)."""
-    parts = (command.args or "").split()
-    if len(parts) < 3:
+    """Create a discount code with a forgiving syntax (20% / $10 / pct 20)."""
+    spec = _parse_promo_args(command.args or "")
+    if not spec.code or spec.discount_type is None or spec.value is None:
         await message.answer(_PROMO_NEW_USAGE, parse_mode="HTML")
         return
-    code, type_raw, value_raw = parts[0], parts[1].lower(), parts[2]
-    if type_raw in ("pct", "percent", "%"):
-        discount_type = DISCOUNT_PERCENT
-    elif type_raw in ("fixed", "amount", "flat"):
-        discount_type = DISCOUNT_FIXED
-    else:
-        await message.answer(_PROMO_NEW_USAGE, parse_mode="HTML")
-        return
-    try:
-        value = Decimal(value_raw)
-    except (InvalidOperation, ValueError):
-        await message.answer("Value must be a number (e.g. 20 or 9.99).")
-        return
-    if value <= 0 or (discount_type == DISCOUNT_PERCENT and value > 100):
+    if spec.value <= 0 or (spec.discount_type == DISCOUNT_PERCENT and spec.value > 100):
         await message.answer("Percent must be 1–100; a fixed amount must be positive.")
         return
-
-    plan_arg = parts[3] if len(parts) > 3 else "*"
-    max_arg = parts[4] if len(parts) > 4 else "*"
-    days_arg = parts[5] if len(parts) > 5 else "*"
-
-    max_redemptions = None
-    if max_arg != "*":
-        if not max_arg.isdigit() or int(max_arg) <= 0:
-            await message.answer("max must be a positive number or *.")
-            return
-        max_redemptions = int(max_arg)
-    expires_at = None
-    if days_arg != "*":
-        if not days_arg.isdigit() or int(days_arg) <= 0:
-            await message.answer("days must be a positive number or *.")
-            return
-        expires_at = datetime.now(UTC) + timedelta(days=int(days_arg))
+    cap_action, cap = _limit_arg(spec.cap)
+    days_action, days = _limit_arg(spec.days)
+    if cap_action == "bad":
+        await message.answer("max must be a positive number (or omit it).")
+        return
+    if days_action == "bad":
+        await message.answer("days must be a positive number (or omit it).")
+        return
+    max_redemptions = cap if cap_action == "set" else None
+    expires_at = datetime.now(UTC) + timedelta(days=days) if days_action == "set" else None
 
     async with SessionFactory() as db:
-        if await promos.get(db, code) is not None:
-            await message.answer(f"A code '{promos.normalize(code)}' already exists.")
+        if await promos.get(db, spec.code) is not None:
+            await message.answer(
+                f"A code '{promos.normalize(spec.code)}' already exists — "
+                f"use /promoedit to change it.")
             return
-        plan_id = None
-        if plan_arg != "*":
-            plan = await db.scalar(select(Plan).where(Plan.name == plan_arg.lower()))
+        plan_id, plan_name = None, None
+        if spec.plan and spec.plan.lower() not in _CLEAR_WORDS:
+            plan = await db.scalar(select(Plan).where(Plan.name == spec.plan.lower()))
             if plan is None:
-                await message.answer(f"Unknown plan '{plan_arg}'.")
+                await message.answer(f"Unknown plan '{spec.plan}'.")
                 return
-            plan_id = plan.id
+            plan_id, plan_name = plan.id, plan.name
         promo = await promos.create(
-            db, code=code, discount_type=discount_type, discount_value=value,
+            db, code=spec.code, discount_type=spec.discount_type, discount_value=spec.value,
             plan_id=plan_id, max_redemptions=max_redemptions, expires_at=expires_at,
             actor=f"admin:{message.from_user.id}",
         )
         await db.commit()
-        desc = promos.describe(promo)
-    scope = plan_arg.lower() if plan_arg != "*" else "any plan"
-    cap = f"{max_redemptions} uses" if max_redemptions else "unlimited"
-    exp = f"expires {expires_at:%Y-%m-%d}" if expires_at else "no expiry"
-    await message.answer(
-        f"✅ Created <b>{promo.code}</b> — {desc}, {scope}, {cap}, {exp}.",
-        parse_mode="HTML",
-    )
+        summary = _promo_summary(promo, plan_name)
+    await message.answer(f"✅ Created {summary}", parse_mode="HTML")
 
 
 @router.message(Command("promos"))
@@ -454,6 +504,80 @@ async def promooff_cmd(message: Message, command: CommandObject) -> None:
         await message.answer(f"🚫 Deactivated <b>{promos.normalize(code)}</b>.", parse_mode="HTML")
     else:
         await message.answer(f"No code '{promos.normalize(code)}' found.")
+
+
+_PROMO_EDIT_USAGE = (
+    "✏️ <b>Edit a discount code</b>\n"
+    "<code>/promoedit CODE [AMOUNT] [plan=…] [max=…] [days=…] [on|off]</code>\n\n"
+    "Only the parts you include change. Use <code>any</code> / <code>never</code> "
+    "to clear a plan / limit / expiry.\n\n"
+    "Examples:\n"
+    "• <code>/promoedit SAVE20 30%</code> — change it to 30% off\n"
+    "• <code>/promoedit SAVE20 max=50 days=14</code> — cap 50 uses, expire in 14d\n"
+    "• <code>/promoedit SAVE20 plan=any</code> — apply to all plans\n"
+    "• <code>/promoedit SAVE20 off</code> — disable it"
+)
+
+
+@router.message(Command("promoedit"))
+async def promoedit_cmd(message: Message, command: CommandObject) -> None:
+    """Modify an existing code: only the fields you pass change."""
+    spec = _parse_promo_args(command.args or "")
+    if not spec.code:
+        await message.answer(_PROMO_EDIT_USAGE, parse_mode="HTML")
+        return
+    kwargs: dict = {}
+    if spec.discount_type is not None and spec.value is not None:
+        if spec.value <= 0 or (spec.discount_type == DISCOUNT_PERCENT and spec.value > 100):
+            await message.answer("Percent must be 1–100; a fixed amount must be positive.")
+            return
+        kwargs["discount_type"], kwargs["discount_value"] = spec.discount_type, spec.value
+    if spec.active is not None:
+        kwargs["is_active"] = spec.active
+
+    cap_action, cap = _limit_arg(spec.cap)
+    if cap_action == "bad":
+        await message.answer("max must be a positive number, or 'any' to clear.")
+        return
+    if cap_action == "set":
+        kwargs["max_redemptions"] = cap
+    elif cap_action == "clear":
+        kwargs["max_redemptions"] = None
+
+    days_action, days = _limit_arg(spec.days)
+    if days_action == "bad":
+        await message.answer("days must be a positive number, or 'never' to clear.")
+        return
+    if days_action == "set":
+        kwargs["expires_at"] = datetime.now(UTC) + timedelta(days=days)
+    elif days_action == "clear":
+        kwargs["expires_at"] = None
+
+    async with SessionFactory() as db:
+        if spec.plan is not None:
+            if spec.plan.lower() in _CLEAR_WORDS:
+                kwargs["plan_id"] = None
+            else:
+                plan = await db.scalar(select(Plan).where(Plan.name == spec.plan.lower()))
+                if plan is None:
+                    await message.answer(f"Unknown plan '{spec.plan}'.")
+                    return
+                kwargs["plan_id"] = plan.id
+        if not kwargs:
+            await message.answer(_PROMO_EDIT_USAGE, parse_mode="HTML")
+            return
+        promo = await promos.update(
+            db, code=spec.code, actor=f"admin:{message.from_user.id}", **kwargs)
+        if promo is None:
+            await message.answer(
+                f"No code '{promos.normalize(spec.code)}' found — create it with /promonew.")
+            return
+        plan_name = None
+        if promo.plan_id is not None:
+            plan_name = await db.scalar(select(Plan.name).where(Plan.id == promo.plan_id))
+        await db.commit()
+        summary = _promo_summary(promo, plan_name)
+    await message.answer(f"✅ Updated {summary}", parse_mode="HTML")
 
 
 @router.message(Command("grant"))
