@@ -91,3 +91,8 @@ def feedback_mode(telegram_id: int) -> str:
 def promo_armed(telegram_id: int) -> str:
     """The promo code a user applied via /promo, used on their next purchase."""
     return f"promo:armed:{telegram_id}"
+
+
+def promo_entry(telegram_id: int) -> str:
+    """Flag: the user's next message should be read as a promo code (short TTL)."""
+    return f"promo:entry:{telegram_id}"

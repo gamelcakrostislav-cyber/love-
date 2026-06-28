@@ -211,6 +211,7 @@ async def show_feedback(message: Message, lang: str) -> None:
 
     Short TTL + cancel-on-navigation (see the catch-all) keep this from later
     swallowing an ordinary question."""
+    await redis_client.delete(redis_keys.promo_entry(message.from_user.id))
     await redis_client.set(redis_keys.feedback_mode(message.from_user.id), "1", ex=300)
     await message.answer(i18n.t(lang, "feedback_prompt"), parse_mode="HTML")
 
@@ -509,13 +510,13 @@ async def _disarm_promo(telegram_id: int) -> None:
     await redis_client.delete(redis_keys.promo_armed(telegram_id))
 
 
-@router.message(Command("promo"))
-async def promo_cmd(message: Message, command: CommandObject) -> None:
-    """/promo <code> — validate a discount code and arm it for the next purchase."""
-    lang = await _user_lang(message.from_user.id)
-    code = promos.normalize(command.args or "")
+async def _apply_promo(message: Message, lang: str, raw_code: str) -> None:
+    """Validate a typed discount code: arm it for the next purchase, or explain
+    why it can't be used — a code that doesn't exist (or is inactive / expired /
+    fully redeemed) gets a clear 'invalid code' message."""
+    code = promos.normalize(raw_code)
     if not code:
-        await message.answer(i18n.t(lang, "promo_usage"), parse_mode="HTML")
+        await message.answer(i18n.t(lang, "promo_enter"), parse_mode="HTML")
         return
     async with SessionFactory() as db:
         promo = await promos.get(db, code)
@@ -530,6 +531,21 @@ async def promo_cmd(message: Message, command: CommandObject) -> None:
         return
     await redis_client.set(redis_keys.promo_armed(message.from_user.id), code, ex=1800)
     await message.answer(i18n.t(lang, "promo_applied", code=code, desc=desc), parse_mode="HTML")
+
+
+@router.message(Command("promo"))
+async def promo_cmd(message: Message, command: CommandObject) -> None:
+    """/promo [code] — apply a discount code. With a code given, validate it now;
+    with none (e.g. tapped from the '/' menu), read the next message as the code."""
+    lang = await _user_lang(message.from_user.id)
+    code = (command.args or "").strip()
+    if not code:
+        # Guided entry: the next free-text message is validated as the code.
+        await redis_client.delete(redis_keys.feedback_mode(message.from_user.id))
+        await redis_client.set(redis_keys.promo_entry(message.from_user.id), "1", ex=300)
+        await message.answer(i18n.t(lang, "promo_enter"), parse_mode="HTML")
+        return
+    await _apply_promo(message, lang, code)
 
 
 # ─── Buy ─────────────────────────────────────────────────────────────────────
@@ -656,11 +672,12 @@ async def support_or_relay(message: Message) -> None:
 
     # 1. Menu button taps route to their action (works in any language / state).
     action = i18n.button_action(text)
-    # Tapping any menu button (other than Feedback itself) cancels a pending
-    # feedback capture — so a question typed after browsing the menu is never
-    # mistaken for feedback.
-    if action and action != "feedback":
-        await redis_client.delete(redis_keys.feedback_mode(message.from_user.id))
+    # Tapping any menu button cancels a pending feedback / promo-code capture, so
+    # a message typed after browsing the menu is never mistaken for one.
+    if action:
+        if action != "feedback":
+            await redis_client.delete(redis_keys.feedback_mode(message.from_user.id))
+        await redis_client.delete(redis_keys.promo_entry(message.from_user.id))
     if action == "human":
         await _human_flow(message)
         return
@@ -702,6 +719,13 @@ async def support_or_relay(message: Message) -> None:
         await handoff.notify_admins(
             f"💡 <b>Feedback</b> from {uname} (id <code>{message.from_user.id}</code>):\n{text}")
         await message.answer(i18n.t(lang, "feedback_thanks"), parse_mode="HTML")
+        return
+
+    # 1c. Promo-code entry: /promo (no code) armed this — validate the typed code
+    # (a non-existent code gets a clear 'invalid' reply instead of hitting the AI).
+    if await redis_client.get(redis_keys.promo_entry(message.from_user.id)):
+        await redis_client.delete(redis_keys.promo_entry(message.from_user.id))
+        await _apply_promo(message, lang, text)
         return
 
     # 2. Human handoff: relay to admins.

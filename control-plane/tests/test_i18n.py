@@ -122,6 +122,7 @@ def test_promo_strings_in_every_language():
     assert "promo" in i18n.COMMAND_ORDER
     for lang in i18n.LANGUAGES:
         assert i18n.t(lang, "promo_usage")
+        assert i18n.t(lang, "promo_enter")
         assert "{" not in i18n.t(lang, "promo_applied", code="SAVE20", desc="20% off")
         assert "{" not in i18n.t(lang, "promo_invalid", code="SAVE20")
         assert "{" not in i18n.t(lang, "promo_used", code="SAVE20")
