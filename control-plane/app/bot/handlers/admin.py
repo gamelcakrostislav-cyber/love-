@@ -36,6 +36,7 @@ from app.models.user import User
 from app.services import activation, devices as devices_svc
 from app.services import (
     bot_content,
+    club,
     handoff,
     keys,
     notifications,
@@ -59,6 +60,24 @@ class IsAdmin(BaseFilter):
 
 # Gate every handler in this router behind the admin check.
 router.message.filter(IsAdmin())
+
+
+@router.message(Command("clubstatus"))
+async def clubstatus_cmd(message: Message) -> None:
+    """Operator one-glance check: is the subscriber group wired up correctly?"""
+    if not club.is_enabled():
+        await message.answer(
+            "👥 Subscriber group: <b>disabled</b> (set CLIENT_GROUP_ID + a real BOT_TOKEN).")
+        return
+    verdict = await club.preflight()
+    async with SessionFactory() as db:
+        try:
+            n = await db.scalar(
+                select(func.count()).select_from(User).where(User.club_member.is_(True)))
+            db_line = f"In group (club_member=true): <b>{n}</b>"
+        except Exception as exc:  # noqa: BLE001 - surface a schema-behind hint instead of crashing
+            db_line = f"DB check failed (schema behind? run migrations): {exc}"
+    await message.answer(f"👥 <b>Subscriber group</b>\nConfig: {verdict}\n{db_line}")
 
 
 @router.message(Command("stats"))

@@ -61,6 +61,46 @@ def is_enabled() -> bool:
     )
 
 
+async def preflight() -> str:
+    """One-shot operator config check: is the bot an admin in a supergroup at
+    CLIENT_GROUP_ID? Returns a short human verdict for the worker boot log and
+    the /clubstatus command, so a misconfigured group fails loudly instead of
+    silently doing nothing."""
+    if not is_enabled():
+        return "disabled (set CLIENT_GROUP_ID + a real BOT_TOKEN to enable)"
+    async with _bot() as bot:
+        return await _check_config(bot)
+
+
+async def _check_config(bot: Bot) -> str:
+    gid = settings.client_group_id
+    try:
+        chat = await bot.get_chat(gid)
+    except Exception as exc:  # noqa: BLE001
+        return (f"MISCONFIGURED: can't read chat {gid} ({exc}). Check the id (it must be the "
+                "supergroup's -100… id) and that the bot is a member of the group.")
+    if chat.type not in ("supergroup", "channel"):
+        return (f"MISCONFIGURED: chat {gid} is a '{chat.type}', not a supergroup. Join requests "
+                "need a supergroup — make the group public once to convert it, then use the new "
+                "-100… id.")
+    try:
+        me = await bot.get_me()
+        member = await bot.get_chat_member(gid, me.id)
+    except Exception as exc:  # noqa: BLE001
+        return f"MISCONFIGURED: can't read the bot's own membership in {gid} ({exc})."
+    if member.status not in ("administrator", "creator"):
+        return (f"MISCONFIGURED: the bot is '{member.status}', not an admin in {gid}. Promote it "
+                "to admin with Invite-via-link + Ban-users rights.")
+    missing = []
+    if getattr(member, "can_invite_users", None) is False:
+        missing.append("Invite via link")
+    if getattr(member, "can_restrict_members", None) is False:
+        missing.append("Ban users")
+    if missing:
+        return f"WARNING: bot is admin but missing rights: {', '.join(missing)}."
+    return f"OK: admin in supergroup '{getattr(chat, 'title', '?')}' ({gid})"
+
+
 def _active_sub(now: datetime):
     return (
         exists()

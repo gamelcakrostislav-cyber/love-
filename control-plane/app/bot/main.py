@@ -66,6 +66,7 @@ _ADMIN_COMMANDS: list[tuple[str, str]] = [
     ("export", "Download customers CSV"),
     ("reply", "Reply in a support handoff"),
     ("close", "Close a support handoff"),
+    ("clubstatus", "Subscriber group health"),
     ("admin", "List admin commands"),
 ]
 

@@ -202,3 +202,49 @@ async def test_chat_member_ignores_bots(db, monkeypatch):
     await club_join.on_chat_member(event)
 
     assert await _club_member(db, 7303) is False               # bot membership not recorded
+
+
+# --- preflight / operator config self-check ---------------------------------
+
+class _FakeAdminBot:
+    def __init__(self, *, chat_type="supergroup", status="administrator",
+                 can_invite=True, can_restrict=True) -> None:
+        self._chat_type = chat_type
+        self._status = status
+        self._can_invite = can_invite
+        self._can_restrict = can_restrict
+
+    async def get_chat(self, chat_id):
+        return types.SimpleNamespace(type=self._chat_type, title="Test")
+
+    async def get_me(self):
+        return types.SimpleNamespace(id=999)
+
+    async def get_chat_member(self, chat_id, user_id):
+        return types.SimpleNamespace(
+            status=self._status,
+            can_invite_users=self._can_invite,
+            can_restrict_members=self._can_restrict,
+        )
+
+
+async def test_preflight_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "bot_token", "CHANGE_ME")
+    assert "disabled" in await club.preflight()
+
+
+async def test_check_config_rejects_basic_group():
+    assert "not a supergroup" in await club._check_config(_FakeAdminBot(chat_type="group"))
+
+
+async def test_check_config_rejects_non_admin():
+    assert "not an admin" in await club._check_config(_FakeAdminBot(status="member"))
+
+
+async def test_check_config_warns_missing_rights():
+    msg = await club._check_config(_FakeAdminBot(can_restrict=False))
+    assert "WARNING" in msg and "Ban users" in msg
+
+
+async def test_check_config_ok():
+    assert (await club._check_config(_FakeAdminBot())).startswith("OK")

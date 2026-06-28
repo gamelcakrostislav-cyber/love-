@@ -71,7 +71,14 @@ async def club_tick() -> None:
         if invited or removed:
             log.info("club: %d invited, %d removed", invited, removed)
     except Exception as exc:  # noqa: BLE001 - club sync must never crash the worker
-        log.warning("club sweep failed: %s", exc)
+        msg = str(exc).lower()
+        if "club_member" in msg and ("does not exist" in msg or "undefinedcolumn" in msg):
+            # Loud + actionable: the most common self-host trap is forgetting to run
+            # migrations (they apply on gateway boot, not the worker's).
+            log.error("club: users.club_member column missing — DB schema is behind. Restart the "
+                      "gateway to run migrations: docker compose up -d --build gateway")
+        else:
+            log.warning("club sweep failed: %s", exc)
 
 
 async def notion_tick() -> None:
@@ -132,6 +139,12 @@ async def main() -> None:
             next_run_time=datetime.now(UTC), max_instances=1, coalesce=True,
         )
         log.info("subscriber group enabled — invite/remove sweep every minute")
+        # One-shot config self-check so a misconfigured group (wrong id, basic
+        # group, bot not admin) fails loudly in the boot log instead of silently.
+        try:
+            log.info("club preflight: %s", await club.preflight())
+        except Exception as exc:  # noqa: BLE001 - never block worker startup
+            log.warning("club preflight failed: %s", exc)
 
     if notion_sync.is_enabled():
         scheduler.add_job(
