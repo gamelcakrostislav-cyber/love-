@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     # After DM'ing a subscriber their join-request link, wait this long before
     # re-inviting them if they haven't joined yet (anti-flood + bounded retry).
     client_group_invite_cooldown: int = 3600
+    # Max users processed per sweep so a big first-enable backlog drains gradually
+    # instead of bursting into Telegram's rate limits.
+    club_sweep_limit: int = 25
 
     # Feedback inbox — a private group/channel the bot posts user feedback to so
     # admins can track it in one place. The bot must be a member/admin there.

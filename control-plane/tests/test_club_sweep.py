@@ -231,17 +231,9 @@ async def test_sweep_remove_toctou_renewal_skips(db, monkeypatch):
 
 async def test_sweep_throttles_to_limit(db, monkeypatch):
     bot = _enable(monkeypatch, FakeBot())
-
-    # to_invite()/to_remove() bind `limit=_SWEEP_LIMIT` as a default at definition
-    # time, so patching club._SWEEP_LIMIT is a no-op. Instead wrap the real query
-    # helper to inject limit=1 — sweep() calls it via the module reference, so this
-    # shim is what actually runs.
-    real_to_invite = club.to_invite
-
-    async def capped_to_invite(db_, now=None):
-        return await real_to_invite(db_, now, limit=1)
-
-    monkeypatch.setattr(club, "to_invite", capped_to_invite)
+    # The per-sweep cap is a real config knob now; to_invite/to_remove read it at
+    # call time, so setting it to 1 caps this sweep at one user.
+    monkeypatch.setattr(settings, "club_sweep_limit", 1)
 
     plan = await make_plan(db)
     one = await make_user(db, telegram_id=9601)

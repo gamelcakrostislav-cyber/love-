@@ -26,17 +26,15 @@ missed grant and uniformly enforces expiry.
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from aiogram import Bot
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramRetryAfter
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot import i18n
+from app.bot.transient import bot_session as _bot
 from app.core import redis_keys
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -49,10 +47,9 @@ from app.services.audit import record_audit
 
 log = get_logger("club")
 
-# Process at most this many users per sweep so a large backlog (e.g. on first
-# enable) drains gradually instead of bursting into Telegram's rate limits, and
-# pace the Telegram calls within a sweep.
-_SWEEP_LIMIT = 25
+# Pace the Telegram calls within a sweep. The per-sweep user cap is configurable
+# (settings.club_sweep_limit) so a large first-enable backlog drains gradually
+# instead of bursting into Telegram's rate limits.
 _PACE_SECONDS = 0.2
 # Held while a worker is sweeping so two replicas can't double-invite/double-ban.
 # TTL < the 60s sweep interval so a crashed worker's lock self-clears.
@@ -116,22 +113,26 @@ def _active_sub(now: datetime):
     )
 
 
+def _limit(limit: int | None) -> int:
+    return limit if limit is not None else max(1, settings.club_sweep_limit)
+
+
 async def to_invite(
-    db: AsyncSession, now: datetime | None = None, *, limit: int = _SWEEP_LIMIT
+    db: AsyncSession, now: datetime | None = None, *, limit: int | None = None
 ) -> list[User]:
     """Active subscribers not currently in the group."""
     now = now or datetime.now(UTC)
     return list(await db.scalars(
-        select(User).where(User.club_member.is_(False), _active_sub(now)).limit(limit)))
+        select(User).where(User.club_member.is_(False), _active_sub(now)).limit(_limit(limit))))
 
 
 async def to_remove(
-    db: AsyncSession, now: datetime | None = None, *, limit: int = _SWEEP_LIMIT
+    db: AsyncSession, now: datetime | None = None, *, limit: int | None = None
 ) -> list[User]:
     """Members whose subscription has lapsed."""
     now = now or datetime.now(UTC)
     return list(await db.scalars(
-        select(User).where(User.club_member.is_(True), ~_active_sub(now)).limit(limit)))
+        select(User).where(User.club_member.is_(True), ~_active_sub(now)).limit(_limit(limit))))
 
 
 async def _has_active_sub(db: AsyncSession, user_id: int, now: datetime) -> bool:
@@ -182,15 +183,6 @@ async def _recently_invited(user_id: int) -> bool:
 async def _mark_invited(user_id: int) -> None:
     await redis_client.set(
         redis_keys.club_invited(user_id), "1", ex=max(60, settings.client_group_invite_cooldown))
-
-
-@asynccontextmanager
-async def _bot():
-    bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    try:
-        yield bot
-    finally:
-        await bot.session.close()
 
 
 async def _join_request_link(bot: Bot) -> str | None:

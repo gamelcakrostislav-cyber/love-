@@ -12,7 +12,10 @@ from html import escape
 
 from app.bot import notify
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.services import handoff
+
+log = get_logger("feedback")
 
 
 def format_body(text: str, *, telegram_id: int, username: str | None) -> str:
@@ -27,8 +30,14 @@ def format_body(text: str, *, telegram_id: int, username: str | None) -> str:
 
 async def route(text: str, *, telegram_id: int, username: str | None) -> None:
     body = format_body(text, telegram_id=telegram_id, username=username)
-    # Post to the channel; if it's misconfigured/unreachable, fall back to DMing
-    # admins so feedback is never silently dropped.
-    if settings.feedback_channel_id and await notify.send_message(settings.feedback_channel_id, body):
-        return
+    cid = settings.feedback_channel_id
+    # Telegram group/channel ids are negative (e.g. -100…). A positive value is a
+    # misconfig (likely a user id) — never post feedback there. 0 = disabled.
+    if cid < 0:
+        if await notify.send_message(cid, body):
+            return  # posted to the channel
+        # send failed / unreachable → fall through to DMing admins (never dropped)
+    elif cid > 0:
+        log.warning("FEEDBACK_CHANNEL_ID=%s looks wrong (channel ids are negative, e.g. -100…) "
+                    "— DMing admins instead", cid)
     await handoff.notify_admins(body)

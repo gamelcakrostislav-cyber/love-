@@ -85,3 +85,26 @@ async def test_route_without_channel_uses_admins(monkeypatch):
     body = feedback_inbox.format_body("hello", telegram_id=7, username="me")
     assert sent == []
     assert admins == [body]
+
+
+async def test_route_rejects_positive_channel_id(monkeypatch):
+    # A positive id is a misconfig (channel ids are negative) — never post there.
+    monkeypatch.setattr(settings, "feedback_channel_id", 123456)
+    sent: list[tuple] = []
+    admins: list[str] = []
+
+    async def fake_send(chat_id, text, reply_markup=None):
+        sent.append((chat_id, text))
+        return True
+
+    async def fake_notify_admins(text):
+        admins.append(text)
+
+    monkeypatch.setattr(feedback_inbox.notify, "send_message", fake_send)
+    monkeypatch.setattr(feedback_inbox.handoff, "notify_admins", fake_notify_admins)
+
+    await feedback_inbox.route("hello", telegram_id=7, username="me")
+
+    body = feedback_inbox.format_body("hello", telegram_id=7, username="me")
+    assert sent == []              # never posted to the bad id
+    assert admins == [body]        # routed to admins instead
