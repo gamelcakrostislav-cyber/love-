@@ -167,6 +167,22 @@ async def test_sweep_skips_recently_invited(db, monkeypatch):
     assert bot.send_calls == []
 
 
+async def test_sweep_skips_when_locked(db, monkeypatch):
+    bot = _enable(monkeypatch, FakeBot())
+    plan = await make_plan(db)
+    user = await make_user(db, telegram_id=9701)
+    await make_subscription(db, user=user, plan=plan, days_left=10)
+    await db.commit()
+    # another worker already holds the sweep lock
+    await redis_client.set(redis_keys.sync_lock("club"), "1", nx=True, ex=55)
+
+    invited, removed = await club.sweep(db)
+
+    assert (invited, removed) == (0, 0)
+    assert bot.invite_calls == []                       # didn't even build a link
+    assert await _invited(user.id) is False
+
+
 async def test_sweep_happy_remove(db, monkeypatch):
     bot = _enable(monkeypatch, FakeBot())
     user = await make_user(db, telegram_id=9301)

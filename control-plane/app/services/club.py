@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramRetryAfter
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +54,9 @@ log = get_logger("club")
 # pace the Telegram calls within a sweep.
 _SWEEP_LIMIT = 25
 _PACE_SECONDS = 0.2
+# Held while a worker is sweeping so two replicas can't double-invite/double-ban.
+# TTL < the 60s sweep interval so a crashed worker's lock self-clears.
+_LOCK_TTL = 55
 
 
 def is_enabled() -> bool:
@@ -202,6 +206,8 @@ async def _join_request_link(bot: Bot) -> str | None:
             kwargs["expire_date"] = int(datetime.now(UTC).timestamp()) + settings.client_group_invite_ttl
         link = await bot.create_chat_invite_link(**kwargs)
         return link.invite_link
+    except TelegramRetryAfter:
+        raise  # let sweep() back off instead of silently dropping the user
     except Exception as exc:  # noqa: BLE001 - never let one bad call break the sweep
         log.warning("create_chat_invite_link failed: %s", exc)
         return None
@@ -211,6 +217,8 @@ async def _ban(bot: Bot, telegram_id: int) -> bool:
     try:
         await bot.ban_chat_member(settings.client_group_id, telegram_id)
         return True
+    except TelegramRetryAfter:
+        raise  # let sweep() back off instead of half-processing the removal
     except Exception as exc:  # noqa: BLE001
         log.warning("ban %s from club failed: %s", telegram_id, exc)
         return False
@@ -236,13 +244,30 @@ async def _revoke_link(bot: Bot, link: str) -> None:
 async def sweep(db: AsyncSession) -> tuple[int, int]:
     """Invite new active subscribers, remove lapsed ones. Returns (invited, removed).
 
-    Invite path sets a Redis cooldown (not club_member) so a sent-but-not-yet-joined
-    or undelivered link isn't re-DM'd every minute; club_member flips to True only on
-    the real join event. Removal flips club_member=False the moment the ban lands —
-    independent of the follow-up unban — so a partial failure can't lock a renewing
-    customer out."""
+    A Redis lock (mirroring notion_sync) means only one worker sweeps at a time, so two
+    replicas can't double-invite/double-ban. Invite path sets a Redis cooldown (not
+    club_member) so a sent-but-not-yet-joined or undelivered link isn't re-DM'd every
+    minute; club_member flips to True only on the real join event. Removal flips
+    club_member=False the moment the ban lands — independent of the follow-up unban — so
+    a partial failure can't lock a renewing customer out."""
     if not is_enabled():
         return (0, 0)
+    if not await redis_client.set(redis_keys.sync_lock("club"), "1", nx=True, ex=_LOCK_TTL):
+        return (0, 0)  # another worker is already sweeping
+    try:
+        return await _run_sweep(db)
+    except TelegramRetryAfter as exc:
+        # Back off (still holding the lock so no replica starts) and resume next sweep;
+        # whatever already committed persists.
+        wait = min(int(getattr(exc, "retry_after", 5)), _LOCK_TTL - 5)
+        log.warning("club: Telegram rate limit — backing off %ss, resuming next sweep", wait)
+        await asyncio.sleep(max(0, wait))
+        return (0, 0)
+    finally:
+        await redis_client.delete(redis_keys.sync_lock("club"))
+
+
+async def _run_sweep(db: AsyncSession) -> tuple[int, int]:
     now = datetime.now(UTC)
     invite_users = await to_invite(db, now)
     remove_users = await to_remove(db, now)
@@ -263,6 +288,8 @@ async def sweep(db: AsyncSession) -> tuple[int, int]:
             lang = i18n.normalize(user.language)
             try:
                 await bot.send_message(user.telegram_id, i18n.t(lang, "club_invite", link=link))
+            except TelegramRetryAfter:
+                raise  # back off in sweep; cooldown isn't set yet, so this user retries
             except Exception as exc:  # noqa: BLE001 - e.g. the user blocked the bot
                 log.warning("club invite DM to %s failed: %s", user.telegram_id, exc)
                 await _revoke_link(bot, link)  # don't leave an orphan link
