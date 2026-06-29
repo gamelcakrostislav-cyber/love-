@@ -35,7 +35,7 @@
     .tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--sec);
       border-top: 1px solid rgba(255,255,255,.08); }
     .tabs button { flex: 1; background: none; color: var(--hint); border-radius: 0; font-weight: 500;
-      padding: 10px 4px; font-size: 12px; }
+      padding: 12px 4px; min-height: 48px; font-size: 12px; }
     .tabs button.active { color: var(--link); }
     .hidden { display: none; }
     .plan { border: 1px solid rgba(255,255,255,.10); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
@@ -67,7 +67,12 @@ async function api(path, opts = {}) {
     headers: { "Authorization": AUTH, "Content-Type": "application/json" },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
-  if (!r.ok) throw new Error("HTTP " + r.status);
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json()).detail || ""; } catch (_) {}
+    const e = new Error("HTTP " + r.status); e.detail = detail; e.status = r.status;
+    throw e;
+  }
   return r.json();
 }
 
@@ -117,7 +122,7 @@ function viewPlans() {
   const cards = PLANS.plans.filter(p => !p.is_trial).map(p => `
     <div class="plan">
       <div class="row"><b>${esc(p.name)}</b><span class="price">$${esc(p.price)}</span></div>
-      <div class="muted">${p.duration_days} days · ${p.max_devices} device(s)</div>
+      <div class="muted">${p.duration_days} days · ${p.max_devices} device(s) · ${p.max_sessions} session(s) · ${p.rate_per_min}/min</div>
       <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">${methodBtns(p.name)}</div>
     </div>`).join("");
   return `<h2>📋 Plans</h2><div class="card">
@@ -127,7 +132,7 @@ function viewPlans() {
 
 function viewDevices() {
   if (!ME.devices.length)
-    return `<h2>📱 Devices</h2><div class="card muted">No devices registered yet.</div>`;
+    return `<h2>📱 Devices</h2><div class="card muted">No devices yet — they appear automatically after your first session.</div>`;
   const rows = ME.devices.map(d => `
     <div class="row"><span><code>${esc(d.fingerprint)}…</code> <span class="pill">${esc(d.status)}</span></span>
     <button class="sec" data-rm="${d.id}">Remove</button></div>`).join("");
@@ -165,7 +170,11 @@ async function buy(plan, method) {
     if (res.status === "granted") { tg.showAlert("✅ Activated " + res.plan + "!"); await reload(); }
     else if (res.kind === "invoice") tg.openInvoice(res.url, (st) => { if (st === "paid") setTimeout(reload, 1500); });
     else if (res.kind === "crypto") tg.openLink(res.url);
-  } catch (e) { tg.showAlert("Could not start checkout. Try again."); }
+  } catch (e) {
+    tg.showAlert(e.detail === "invalid_promo"
+      ? "That promo code isn't valid. Remove it or fix it, then try again."
+      : "Could not start checkout. Try again.");
+  }
   finally { tg.MainButton.hideProgress(); }
 }
 

@@ -78,7 +78,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "choose_language": "🌐 Please choose your language:",
         "language_set": "✅ Language set to {lang}.",
-        "welcome": "👋 <b>Welcome!</b> This bot manages your arbitrage subscription, API key and devices.\n\nTap a button below to begin — or just type a question and the assistant will help.",
+        "welcome": "👋 <b>Welcome!</b> This bot manages your arbitrage subscription, API key and devices.\n\n🎁 New here? Tap 📋 <b>Plans</b> — the trial is free. Or just type a question and the assistant will help.",
         "welcome_back": "👋 <b>Welcome back!</b> Tap a button below, or ask me anything.",
         "getting_started": (
             "<b>🚀 Quick start</b>\n"
@@ -192,7 +192,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "ru": {
         "choose_language": "🌐 Пожалуйста, выберите язык:",
         "language_set": "✅ Язык установлен: {lang}.",
-        "welcome": "👋 <b>Добро пожаловать!</b> Этот бот управляет вашей подпиской, API-ключом и устройствами.\n\nНажмите кнопку ниже, чтобы начать — или просто напишите вопрос, и ассистент поможет.",
+        "welcome": "👋 <b>Добро пожаловать!</b> Этот бот управляет вашей подпиской, API-ключом и устройствами.\n\n🎁 Впервые? Нажмите 📋 <b>Тарифы</b> — пробный период бесплатный. Или просто напишите вопрос, и ассистент поможет.",
         "welcome_back": "👋 <b>С возвращением!</b> Нажмите кнопку ниже или задайте любой вопрос.",
         "getting_started": (
             "<b>🚀 Быстрый старт</b>\n"
@@ -306,7 +306,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "uk": {
         "choose_language": "🌐 Будь ласка, оберіть мову:",
         "language_set": "✅ Мову встановлено: {lang}.",
-        "welcome": "👋 <b>Ласкаво просимо!</b> Цей бот керує вашою підпискою, API-ключем і пристроями.\n\nНатисніть кнопку нижче, щоб почати — або просто напишіть запитання, і асистент допоможе.",
+        "welcome": "👋 <b>Ласкаво просимо!</b> Цей бот керує вашою підпискою, API-ключем і пристроями.\n\n🎁 Уперше? Натисніть 📋 <b>Тарифи</b> — пробний період безкоштовний. Або просто напишіть запитання, і асистент допоможе.",
         "welcome_back": "👋 <b>З поверненням!</b> Натисніть кнопку нижче або поставте будь-яке запитання.",
         "getting_started": (
             "<b>🚀 Швидкий старт</b>\n"
@@ -420,7 +420,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "es": {
         "choose_language": "🌐 Por favor, elige tu idioma:",
         "language_set": "✅ Idioma establecido: {lang}.",
-        "welcome": "👋 <b>¡Bienvenido!</b> Este bot gestiona tu suscripción, clave API y dispositivos.\n\nPulsa un botón abajo para empezar — o simplemente escribe una pregunta y el asistente te ayudará.",
+        "welcome": "👋 <b>¡Bienvenido!</b> Este bot gestiona tu suscripción, clave API y dispositivos.\n\n🎁 ¿Primera vez? Pulsa 📋 <b>Planes</b> — la prueba es gratis. O simplemente escribe una pregunta y el asistente te ayudará.",
         "welcome_back": "👋 <b>¡Bienvenido de nuevo!</b> Pulsa un botón abajo o pregúntame lo que quieras.",
         "getting_started": (
             "<b>🚀 Inicio rápido</b>\n"
@@ -534,7 +534,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "fr": {
         "choose_language": "🌐 Veuillez choisir votre langue :",
         "language_set": "✅ Langue définie : {lang}.",
-        "welcome": "👋 <b>Bienvenue !</b> Ce bot gère votre abonnement, votre clé API et vos appareils.\n\nAppuyez sur un bouton ci-dessous pour commencer — ou posez simplement une question, l'assistant vous aidera.",
+        "welcome": "👋 <b>Bienvenue !</b> Ce bot gère votre abonnement, votre clé API et vos appareils.\n\n🎁 Première fois ? Appuyez sur 📋 <b>Forfaits</b> — l'essai est gratuit. Ou posez simplement une question, l'assistant vous aidera.",
         "welcome_back": "👋 <b>Bon retour !</b> Appuyez sur un bouton ci-dessous ou posez-moi une question.",
         "getting_started": (
             "<b>🚀 Démarrage rapide</b>\n"

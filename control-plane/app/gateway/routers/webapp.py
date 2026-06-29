@@ -124,6 +124,8 @@ async def list_plans(_: User = Depends(require_webapp_user), db: AsyncSession = 
             "name": p.name, "price": f"{p.price}", "currency": p.currency,
             "duration_days": p.duration_days, "is_trial": p.is_trial,
             "max_devices": p.max_devices,
+            "max_sessions": p.max_concurrent_sessions,
+            "rate_per_min": p.rate_limit_per_min,
         }
         for p in rows
     ]
@@ -158,6 +160,10 @@ async def buy(
     resolved = await payments.resolve_checkout(db, user=user, plan_name=plan_name, armed_code=code)
     if resolved is None or resolved.plan.is_trial or resolved.plan.price <= 0:
         raise HTTPException(status_code=400, detail="unknown or non-purchasable plan")
+    # A code was entered but didn't apply → fail loud instead of silently charging
+    # full price (the Mini App takes the code inline, with no separate /promo step).
+    if code and resolved.promo is None:
+        raise HTTPException(status_code=400, detail="invalid_promo")
     plan = resolved.plan
     promo_id = resolved.promo.id if resolved.promo else None
     title = f"{plan.name} subscription"

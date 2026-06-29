@@ -146,3 +146,16 @@ async def test_buy_rejects_bad_method_and_unknown_plan(db, client, real_token):
             json={"plan": "ghost", "method": "stars", "code": 123})  # non-str code must not 500
     assert bad_method.status_code == 400
     assert unknown_plan.status_code == 400
+
+
+async def test_buy_rejects_invalid_promo(db, client, real_token):
+    await make_plan(db, name="monthly", price="49.00")
+    await db.commit()
+    auth = "tma " + sign_init_data(real_token, {"id": 900400})
+    async with client:
+        r = await client.post(
+            "/webapp/api/buy", headers={"Authorization": auth},
+            json={"plan": "monthly", "method": "stars", "code": "BOGUS"})
+    # A code that doesn't apply must be rejected, not silently charged at full price.
+    assert r.status_code == 400
+    assert r.json()["detail"] == "invalid_promo"
