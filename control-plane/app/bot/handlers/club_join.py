@@ -21,7 +21,7 @@ from app.bot import i18n
 from app.core.config import settings
 from app.core.db import SessionFactory
 from app.core.logging import get_logger
-from app.services import club
+from app.services import club, users
 
 log = get_logger("club-bot")
 
@@ -60,12 +60,15 @@ async def on_join_request(event: ChatJoinRequest, bot: Bot) -> None:
                 return
             await club.set_membership(db, tg_id, joined=True)
             return
-    # Not an active subscriber — decline, then explain (best-effort DM).
+        # Not an active subscriber. Use their chosen language if we know them,
+        # else default to English — never guess from the raw device locale.
+        known = await users.get_by_telegram_id(db, tg_id)
+        lang = i18n.normalize(known.language) if known else i18n.DEFAULT_LANG
+    # Decline, then explain (best-effort DM).
     try:
         await event.decline()
     except Exception as exc:  # noqa: BLE001
         log.warning("decline club join for %s failed: %s", tg_id, exc)
-    lang = i18n.normalize(getattr(event.from_user, "language_code", None) or "")
     try:
         await bot.send_message(tg_id, i18n.t(lang, "club_declined"))
     except Exception:  # noqa: BLE001 - they may not have started the bot

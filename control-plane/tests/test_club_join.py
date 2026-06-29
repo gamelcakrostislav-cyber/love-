@@ -151,6 +151,18 @@ async def test_handler_declines_non_subscriber(db, monkeypatch):
     assert len(bot.sent) == 1                                  # told them why
 
 
+async def test_handler_declines_unknown_user_in_english(db, monkeypatch):
+    _enable(monkeypatch)
+    _use_test_db(monkeypatch, db)
+    # a total stranger (no user row) with a French device — must NOT get French.
+    event, bot = _FakeJoinRequest(_GROUP, 778899, lang="fr"), _FakeBot()
+    await club_join.on_join_request(event, bot)
+
+    assert event.declined is True
+    assert len(bot.sent) == 1
+    assert "members chat" in bot.sent[0][1]                    # English default, not device locale
+
+
 async def test_handler_ignores_other_chats(db, monkeypatch):
     _enable(monkeypatch)
     _use_test_db(monkeypatch, db)
