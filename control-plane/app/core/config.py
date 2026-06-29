@@ -98,7 +98,7 @@ class Settings(BaseSettings):
 
     # Expiry reminders — DM users before their subscription lapses.
     expiry_reminders_enabled: bool = True
-    expiry_reminder_days: str = "3,1"   # send a nudge at each of these days-left bands
+    expiry_reminder_days: str = "7,3"   # nudge a week out, then 3 days out (CSV, override in .env)
     expiry_reminder_minutes: int = 60   # how often the worker sweeps for due reminders
 
     # Win-back — DM lapsed users (no active sub) this many days after expiry.

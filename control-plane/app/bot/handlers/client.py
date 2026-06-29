@@ -13,6 +13,7 @@ from html import escape as html_escape
 from urllib.parse import quote
 
 from aiogram import F, Router
+from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import (
     CallbackQuery,
@@ -57,6 +58,21 @@ from app.services import (
 )
 
 router = Router(name="client")
+
+
+def _is_private(message: Message) -> bool:
+    """True only for 1:1 DMs with the bot."""
+    return message.chat.type == ChatType.PRIVATE
+
+
+# Every handler here is a personal commerce/support conversation: it shows the
+# user's own subscription, key, devices, or routes their free text to the AI.
+# Scoping the whole router to private chats keeps the bot from (a) answering
+# every message when it's added to a group — the AI fired on ordinary group
+# chatter — and (b) leaking a user's private status into a public group. Group
+# events the bot DOES care about (join requests, members joining/leaving the
+# subscriber group) live in club_join.router, which uses separate update types.
+router.message.filter(_is_private)
 
 
 # Keyword triggers for the operator hand-off. The 'Talk to a person' button is

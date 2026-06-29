@@ -236,7 +236,7 @@ server-side — the client can never self-extend, and revocation/expiry propagat
 within the entitlement cache window.
 
 It also sends **expiry reminders**: every `EXPIRY_REMINDER_MINUTES` it DMs users
-whose subscription falls into a days-left band (`EXPIRY_REMINDER_DAYS=3,1`),
+whose subscription falls into a days-left band (`EXPIRY_REMINDER_DAYS=7,3`),
 localized, with a one-tap renew button — deduped per band via a Redis marker so
 nobody is spammed.
 
