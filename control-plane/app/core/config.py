@@ -104,12 +104,18 @@ class Settings(BaseSettings):
     # Win-back — DM lapsed users (no active sub) this many days after expiry.
     winback_enabled: bool = True
     winback_days: int = 3
+    winback_promo_code: str = ""        # optional code to offer (+ auto-arm) in win-back DMs
 
     # Client push / automation — onboarding drip + weekly digest (respect opt-out).
     onboarding_drip_enabled: bool = True
     onboarding_drip_days: str = "1,3"   # nudge non-subscribers at these days-since-signup
     weekly_digest_enabled: bool = True
+    upgrade_nudge_enabled: bool = True  # suggest the longest plan when it's cheaper per day
     notifications_minutes: int = 60     # worker sweep cadence for drip/digest
+
+    # Server-to-server: trusted backends POST /internal/announce to post into the
+    # subscriber group. Empty token = endpoint disabled (fails closed).
+    internal_api_token: str = ""
 
     # AI support agent — any OpenAI-compatible provider (default: free Groq)
     support_ai_enabled: bool = True

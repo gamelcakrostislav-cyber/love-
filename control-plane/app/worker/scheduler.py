@@ -55,9 +55,11 @@ async def notifications_tick() -> None:
         async with SessionFactory() as db:
             drip = await notifications.drip_sweep(db)
             digest = await notifications.digest_sweep(db)
+            upgrade = await notifications.upgrade_sweep(db)
             mile = await growth.milestone_sweep(db)
-        if drip or digest or mile:
-            log.info("notifications: %d drip, %d digest, %d milestone", drip, digest, mile)
+        if drip or digest or upgrade or mile:
+            log.info("notifications: %d drip, %d digest, %d upgrade, %d milestone",
+                     drip, digest, upgrade, mile)
     except Exception as exc:  # noqa: BLE001 - notifications must never crash the worker
         log.warning("notifications sweep failed: %s", exc)
 

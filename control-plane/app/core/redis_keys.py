@@ -78,6 +78,11 @@ def digest(user_id: int) -> str:
     return f"digest:{user_id}"
 
 
+def upgrade_nudge(user_id: int) -> str:
+    """Marker that an upgrade-to-best-plan nudge was sent (TTL re-allows it later)."""
+    return f"upgrade:{user_id}"
+
+
 def club_invited(user_id: int) -> str:
     """Cooldown marker: a join-request link was DM'd to this subscriber. Suppresses
     re-inviting them every sweep while they decide; expiry gives a bounded retry so

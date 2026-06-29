@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +30,7 @@ log = get_logger("notifications")
 _DRIP_WINDOW_DAYS = 2     # width of each day-band so old users aren't re-nudged
 _DIGEST_TTL = 7 * 86400   # one digest per user per 7 days
 _DRIP_TTL = 30 * 86400
+_UPGRADE_TTL = 30 * 86400  # at most one upgrade nudge per user per 30 days
 
 # Admin /push segments -> human description.
 SEGMENTS = ("all", "active", "trial", "inactive")
@@ -108,6 +110,71 @@ async def digest_sweep(db: AsyncSession) -> int:
             sent += 1
         except Exception as exc:  # noqa: BLE001
             log.warning("digest DM to %s failed: %s", user.telegram_id, exc)
+    return sent
+
+
+def upgrade_nudge_enabled() -> bool:
+    return bool(settings.upgrade_nudge_enabled)
+
+
+def _upgrade_kb(lang: str, plan_name: str) -> InlineKeyboardMarkup:
+    """One-tap 'Upgrade to <plan>' → reuses the bot's buy:<plan> callback."""
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=i18n.t(lang, "upgrade_button", plan=plan_name), callback_data=f"buy:{plan_name}")]])
+
+
+async def upgrade_sweep(db: AsyncSession) -> int:
+    """Nudge subscribers on a shorter plan toward the longest paid plan when it's
+    genuinely cheaper per day. One DM per user per _UPGRADE_TTL, opt-out respected.
+
+    'Best value' = the active, paid plan with the most days. We only nudge a user
+    if that plan's per-day price beats their current plan's, so the savings claim
+    is always real. Returns the number of nudges sent."""
+    if not upgrade_nudge_enabled():
+        return 0
+    now = datetime.now(UTC)
+    best = await db.scalar(
+        select(Plan).where(Plan.is_active.is_(True), Plan.is_trial.is_(False), Plan.price > 0)
+        .order_by(Plan.duration_days.desc()).limit(1))
+    if best is None or best.duration_days <= 0:
+        return 0
+    best_per_day = best.price / best.duration_days
+    rows = (await db.execute(
+        select(User, Plan)
+        .join(Subscription, Subscription.user_id == User.id)
+        .join(Plan, Plan.id == Subscription.plan_id)
+        .where(Subscription.status == SubscriptionStatus.ACTIVE,
+               Subscription.expires_at > now,
+               User.notifications_opt_out.is_(False),
+               Plan.is_trial.is_(False), Plan.price > 0,
+               Plan.duration_days < best.duration_days)
+        .order_by(Subscription.expires_at.desc()))).all()
+    seen: set[int] = set()
+    sent = 0
+    for user, plan in rows:
+        if user.id in seen:  # one nudge per user even with multiple subs
+            continue
+        seen.add(user.id)
+        if plan.duration_days <= 0:
+            continue
+        cur_per_day = plan.price / plan.duration_days
+        if best_per_day >= cur_per_day:
+            continue  # not actually cheaper per day → nothing honest to claim
+        pct = int(round((1 - best_per_day / cur_per_day) * 100))
+        if pct <= 0:
+            continue
+        if not await redis_client.set(
+                redis_keys.upgrade_nudge(user.id), "1", nx=True, ex=_UPGRADE_TTL):
+            continue
+        lang = i18n.normalize(user.language)
+        try:
+            await notify.send_message(
+                user.telegram_id,
+                i18n.t(lang, "upgrade_nudge", current=plan.name, plan=best.name, pct=pct),
+                reply_markup=_upgrade_kb(lang, best.name))
+            sent += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("upgrade DM to %s failed: %s", user.telegram_id, exc)
     return sent
 
 

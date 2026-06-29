@@ -18,7 +18,7 @@ from sqlalchemy import text
 from app.core.db import engine
 from app.core.logging import configure_logging, get_logger
 from app.core.redis import ping as redis_ping
-from app.gateway.routers import auth, protected, webapp, webhooks
+from app.gateway.routers import auth, internal, protected, webapp, webhooks
 from app.services.errors import LicensingError
 
 log = get_logger("gateway")
@@ -58,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(protected.router)
     app.include_router(webhooks.router)
     app.include_router(webapp.router)
+    app.include_router(internal.router)
     # Serve the Mini App static bundle at /app (HTTPS required by Telegram).
     # check_dir=False so a missing bundle degrades to 404s instead of crashing.
     app.mount("/app", StaticFiles(directory=str(_WEBAPP_STATIC), html=True, check_dir=False),

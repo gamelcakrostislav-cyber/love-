@@ -110,6 +110,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Tap below to renew in one tap and keep your access."
         ),
         "renew_button": "🔄 Renew {plan}",
+        "upgrade_button": "💎 Upgrade to {plan}",
+        "upgrade_nudge": "💎 <b>Save ~{pct}%</b>\nYou're on <b>{current}</b>. The <b>{plan}</b> plan costs about {pct}% less per day for the same full access — tap to switch:",
+        "winback_promo": "👋 We miss you! Your <b>{plan}</b> access ended {days} day(s) ago.\n🎟 Here's <b>{code}</b> — a discount that's already applied. Tap 📋 Plans and grab it before it's gone.",
         "winback": (
             "👋 We miss you! Your <b>{plan}</b> access ended {days} day(s) ago.\n"
             "Come back any time — tap 📋 Plans to pick up where you left off."
@@ -225,6 +228,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Нажмите ниже, чтобы продлить в один тап и сохранить доступ."
         ),
         "renew_button": "🔄 Продлить {plan}",
+        "upgrade_button": "💎 Перейти на {plan}",
+        "upgrade_nudge": "💎 <b>Экономия ~{pct}%</b>\nУ вас тариф <b>{current}</b>. Тариф <b>{plan}</b> примерно на {pct}% дешевле в день при том же полном доступе — нажмите, чтобы перейти:",
+        "winback_promo": "👋 Мы скучаем! Доступ <b>{plan}</b> закончился {days} дн. назад.\n🎟 Вот <b>{code}</b> — скидка уже применена. Нажмите 📋 Тарифы и успейте воспользоваться.",
         "winback": (
             "👋 Мы скучаем! Ваш доступ <b>{plan}</b> закончился {days} дн. назад.\n"
             "Возвращайтесь в любой момент — нажмите 📋 Тарифы, чтобы продолжить."
@@ -340,6 +346,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Натисніть нижче, щоб продовжити в один тап і зберегти доступ."
         ),
         "renew_button": "🔄 Продовжити {plan}",
+        "upgrade_button": "💎 Перейти на {plan}",
+        "upgrade_nudge": "💎 <b>Економія ~{pct}%</b>\nУ вас тариф <b>{current}</b>. Тариф <b>{plan}</b> приблизно на {pct}% дешевший на день за той самий повний доступ — натисніть, щоб перейти:",
+        "winback_promo": "👋 Ми сумуємо! Доступ <b>{plan}</b> завершився {days} дн. тому.\n🎟 Ось <b>{code}</b> — знижка вже застосована. Натисніть 📋 Тарифи й скористайтеся, поки діє.",
         "winback": (
             "👋 Ми сумуємо! Ваш доступ <b>{plan}</b> завершився {days} дн. тому.\n"
             "Повертайтеся будь-коли — натисніть 📋 Тарифи, щоб продовжити."
@@ -455,6 +464,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Pulsa abajo para renovar en un toque y mantener tu acceso."
         ),
         "renew_button": "🔄 Renovar {plan}",
+        "upgrade_button": "💎 Mejorar a {plan}",
+        "upgrade_nudge": "💎 <b>Ahorra ~{pct}%</b>\nTienes <b>{current}</b>. El plan <b>{plan}</b> cuesta cerca de un {pct}% menos por día con el mismo acceso completo — pulsa para cambiar:",
+        "winback_promo": "👋 ¡Te echamos de menos! Tu acceso <b>{plan}</b> terminó hace {days} día(s).\n🎟 Aquí tienes <b>{code}</b> — un descuento ya aplicado. Pulsa 📋 Planes y aprovéchalo antes de que caduque.",
         "winback": (
             "👋 ¡Te echamos de menos! Tu acceso <b>{plan}</b> terminó hace {days} día(s).\n"
             "Vuelve cuando quieras — pulsa 📋 Planes para continuar."
@@ -570,6 +582,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Appuyez ci-dessous pour renouveler en un geste et garder votre accès."
         ),
         "renew_button": "🔄 Renouveler {plan}",
+        "upgrade_button": "💎 Passer à {plan}",
+        "upgrade_nudge": "💎 <b>Économisez ~{pct}%</b>\nVous êtes sur <b>{current}</b>. Le forfait <b>{plan}</b> coûte environ {pct}% de moins par jour pour le même accès complet — appuyez pour changer :",
+        "winback_promo": "👋 Vous nous manquez ! Votre accès <b>{plan}</b> a pris fin il y a {days} jour(s).\n🎟 Voici <b>{code}</b> — une réduction déjà appliquée. Appuyez sur 📋 Forfaits et profitez-en avant qu'elle n'expire.",
         "winback": (
             "👋 Vous nous manquez ! Votre accès <b>{plan}</b> a pris fin il y a {days} jour(s).\n"
             "Revenez quand vous voulez — appuyez sur 📋 Forfaits pour continuer."

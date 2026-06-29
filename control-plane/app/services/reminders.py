@@ -24,8 +24,12 @@ from app.models.enums import SubscriptionStatus
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.services import promos
 
 log = get_logger("reminders")
+
+# A win-back code stays armed long enough that a lapsed user has days to return.
+_WINBACK_PROMO_TTL = 14 * 86400
 
 
 def _renew_kb(lang: str, plan_name: str) -> InlineKeyboardMarkup:
@@ -101,12 +105,32 @@ def winback_enabled() -> bool:
     return bool(settings.winback_enabled and settings.winback_days > 0)
 
 
+async def _resolve_winback_promo(db: AsyncSession) -> str | None:
+    """The configured win-back code, normalized — but only if it's actually usable
+    right now (active, not expired, not fully redeemed). Otherwise None, so we fall
+    back to a plain win-back DM instead of dangling a dead code."""
+    raw = settings.winback_promo_code
+    if not raw:
+        return None
+    code = promos.normalize(raw)
+    promo = await promos.get(db, code)
+    usable = (
+        promo is not None and promo.is_active
+        and (promo.expires_at is None or promo.expires_at > datetime.now(UTC))
+        and (promo.max_redemptions is None or promo.times_redeemed < promo.max_redemptions))
+    if not usable:
+        log.warning("winback_promo_code '%s' isn't usable — win-back DMs go out without a code", raw)
+        return None
+    return code
+
+
 async def winback_sweep(db: AsyncSession) -> int:
     """DM users whose access lapsed ~winback_days ago and who haven't renewed."""
     if not winback_enabled():
         return 0
     now = datetime.now(UTC)
     d = settings.winback_days
+    promo_code = await _resolve_winback_promo(db)
     lo, hi = now - timedelta(days=d + 1), now - timedelta(days=d)
     # Latest subscription per user that expired in the [d+1, d) days-ago window…
     rows = (await db.execute(
@@ -134,7 +158,13 @@ async def winback_sweep(db: AsyncSession) -> int:
             select(Plan.name).join(Subscription, Subscription.plan_id == Plan.id)
             .where(Subscription.user_id == user_id, Subscription.expires_at == last_exp).limit(1))
         lang = i18n.normalize(user.language)
-        text = i18n.t(lang, "winback", plan=plan or "subscription", days=d)
+        if promo_code:
+            text = i18n.t(lang, "winback_promo", plan=plan or "subscription", days=d, code=promo_code)
+            # Arm it so the next purchase applies the discount automatically.
+            await redis_client.set(
+                redis_keys.promo_armed(user.telegram_id), promo_code, ex=_WINBACK_PROMO_TTL)
+        else:
+            text = i18n.t(lang, "winback", plan=plan or "subscription", days=d)
         try:
             await notify.send_message(user.telegram_id, text, reply_markup=_plans_kb(lang))
             sent += 1
