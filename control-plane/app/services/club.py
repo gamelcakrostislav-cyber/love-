@@ -102,6 +102,27 @@ async def _check_config(bot: Bot) -> str:
     return f"OK: admin in supergroup '{getattr(chat, 'title', '?')}' ({gid})"
 
 
+async def announce(text: str, *, topic_id: int | None = None, pin: bool = False) -> int:
+    """Post an operator message into the subscriber group; return its message id.
+
+    HTML is honoured (the transient bot defaults to HTML parse mode). `topic_id`
+    targets a forum topic thread (message_thread_id); `pin` pins the post (best
+    effort — a failed pin doesn't undo a successful post). Raises if the group
+    isn't configured; Telegram errors propagate so the caller can report them."""
+    if not is_enabled():
+        raise RuntimeError("subscriber group not configured (set CLIENT_GROUP_ID + BOT_TOKEN)")
+    async with _bot() as bot:
+        msg = await bot.send_message(
+            settings.client_group_id, text, message_thread_id=topic_id)
+        if pin:
+            try:
+                await bot.pin_chat_message(
+                    settings.client_group_id, msg.message_id, disable_notification=True)
+            except Exception as exc:  # noqa: BLE001 - post landed; pin is best effort
+                log.warning("announce: post sent but pin failed: %s", exc)
+        return msg.message_id
+
+
 def _active_sub(now: datetime):
     return (
         exists()

@@ -251,6 +251,7 @@ async def admin_help_cmd(message: Message) -> None:
         "/notion [sync] — Notion CRM status / sync now\n"
         "/broadcast &lt;msg&gt; — message every user\n"
         "/push &lt;segment&gt; &lt;msg&gt; — message a segment (opted-in)\n"
+        "/announce [topic= ] [pin] &lt;msg&gt; — post in the subscriber group\n"
         "/promonew &lt;code&gt; &lt;20%|$10&gt; [plan=] [max=] [days=] — new code\n"
         "/promoedit &lt;code&gt; … — change a code (amount/plan/max/days/on|off)\n"
         "/promos — list discount codes\n"
@@ -283,6 +284,65 @@ async def broadcast_cmd(message: Message, command: CommandObject) -> None:
             failed += 1
         await asyncio.sleep(0.05)  # stay well under Telegram's ~30 msg/s limit
     await message.answer(f"📣 Broadcast done — {sent} sent, {failed} failed.")
+
+
+def _parse_announce(arg: str) -> tuple[int | None, bool, str]:
+    """Pull optional leading `topic=<id>` / `pin` flags off an /announce arg.
+
+    Flags are only recognised at the very front; the first non-flag token starts
+    the message body, whose internal spacing and newlines are preserved verbatim
+    (so multi-line HTML announcements survive intact)."""
+    topic_id: int | None = None
+    pin = False
+    rest = arg
+    while True:
+        parts = rest.split(None, 1)  # first token + untouched remainder
+        if not parts:
+            break
+        head = parts[0]
+        low = head.lower()
+        if low == "pin":
+            pin = True
+        elif low.startswith("topic=") and head.split("=", 1)[1].lstrip("-").isdigit():
+            topic_id = int(head.split("=", 1)[1])
+        else:
+            break
+        rest = parts[1] if len(parts) > 1 else ""
+    return topic_id, pin, rest.strip()
+
+
+@router.message(Command("announce"))
+async def announce_cmd(message: Message, command: CommandObject) -> None:
+    """/announce [topic=<id>] [pin] <message> — post into the subscriber group.
+
+    HTML allowed. `pin` pins the post; `topic=<thread_id>` targets a forum topic."""
+    if not club.is_enabled():
+        await message.answer(
+            "👥 Subscriber group isn't configured "
+            "(set CLIENT_GROUP_ID + a real BOT_TOKEN). See /clubstatus.")
+        return
+    topic_id, pin, text = _parse_announce(command.args or "")
+    if not text:
+        await message.answer(
+            "📣 <b>Post to the subscriber group</b>\n"
+            "<code>/announce [topic=&lt;id&gt;] [pin] &lt;message&gt;</code>\n\n"
+            "HTML allowed. <code>pin</code> pins it; <code>topic=123</code> posts into a "
+            "forum topic thread (the number after the last <code>/</code> in a topic's link).",
+            parse_mode="HTML")
+        return
+    try:
+        mid = await club.announce(text, topic_id=topic_id, pin=pin)
+    except Exception as exc:  # noqa: BLE001 - report Telegram/config errors to the admin
+        log.warning("/announce failed: %s", exc)
+        await message.answer(f"⚠️ Couldn't post to the group: {exc}")
+        return
+    extras = []
+    if topic_id is not None:
+        extras.append(f"topic {topic_id}")
+    if pin:
+        extras.append("pinned")
+    tail = f" ({', '.join(extras)})" if extras else ""
+    await message.answer(f"✅ Posted to the subscriber group{tail} — message id {mid}.")
 
 
 @router.message(Command("feedback"))

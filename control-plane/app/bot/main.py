@@ -63,6 +63,7 @@ _ADMIN_COMMANDS: list[tuple[str, str]] = [
     ("notion", "Notion CRM status / sync"),
     ("broadcast", "Message every user"),
     ("push", "Message a segment (opted-in)"),
+    ("announce", "Post in the subscriber group"),
     ("export", "Download customers CSV"),
     ("reply", "Reply in a support handoff"),
     ("close", "Close a support handoff"),
