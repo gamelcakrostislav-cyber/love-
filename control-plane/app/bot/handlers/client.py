@@ -640,6 +640,17 @@ async def plans_callback(cb: CallbackQuery) -> None:
     await cb.answer()
 
 
+@router.callback_query(F.data == "act:promo")
+async def promo_entry_callback(cb: CallbackQuery) -> None:
+    """'🎟 Have a promo code?' on the plans page → arm guided code entry, so the
+    next message is validated as a code (mirrors /promo with no argument)."""
+    lang = await _user_lang(cb.from_user.id)
+    await redis_client.delete(redis_keys.feedback_mode(cb.from_user.id))
+    await redis_client.set(redis_keys.promo_entry(cb.from_user.id), "1", ex=300)
+    await cb.message.answer(i18n.t(lang, "promo_enter"), parse_mode="HTML")
+    await cb.answer()
+
+
 @router.callback_query(F.data.startswith("buy:"))
 async def buy_callback(cb: CallbackQuery) -> None:
     plan_name = cb.data.split(":", 1)[1]

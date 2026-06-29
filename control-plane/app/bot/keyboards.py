@@ -68,6 +68,10 @@ def plans_keyboard(plans: list[Plan], lang: str) -> InlineKeyboardMarkup:
         )]
         for p in plans
     ]
+    # Discount-code entry, right under the plans so it's easy to find (otherwise
+    # it's only reachable by typing /promo).
+    rows.append([InlineKeyboardButton(
+        text=i18n.t(lang, "plans_promo_btn"), callback_data="act:promo")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
