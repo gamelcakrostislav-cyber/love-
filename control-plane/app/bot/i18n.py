@@ -187,7 +187,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "pay_confirmed_renew": "✅ Payment confirmed — <b>{plan}</b> extended until {date}. Your existing API key stays valid.",
         "club_invite": "👥 <b>Members chat</b>\nYour subscription unlocks our private subscriber group. Tap to join — I'll let you in:\n{link}",
         "club_removed": "👋 Your access to the members chat ended with your subscription. Renew any time — tap 📋 Plans — and you'll get a fresh invite.",
-        "club_declined": "🔒 I can't add you to the members chat — your subscription isn't active. Tap 📋 Plans to subscribe, then open your invite link again.",
+        "club_declined": "🔒 I can't add you to the members chat — your subscription isn't active. Tap 📋 Plans to subscribe and I'll send you your own invite link.",
     },
     "ru": {
         "choose_language": "🌐 Пожалуйста, выберите язык:",
@@ -301,7 +301,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "pay_confirmed_renew": "✅ Оплата подтверждена — <b>{plan}</b> продлена до {date}. Ваш API-ключ остаётся действительным.",
         "club_invite": "👥 <b>Чат для подписчиков</b>\nВаша подписка открывает доступ в закрытую группу. Нажмите, чтобы войти — я вас впущу:\n{link}",
         "club_removed": "👋 Доступ к чату для подписчиков завершился вместе с подпиской. Продлите в любой момент — нажмите 📋 Тарифы — и получите новое приглашение.",
-        "club_declined": "🔒 Не могу добавить вас в чат для подписчиков — подписка неактивна. Нажмите 📋 Тарифы, оформите подписку и снова откройте ссылку-приглашение.",
+        "club_declined": "🔒 Не могу добавить вас в чат для подписчиков — подписка неактивна. Нажмите 📋 Тарифы, оформите подписку — и я пришлю вам персональную ссылку-приглашение.",
     },
     "uk": {
         "choose_language": "🌐 Будь ласка, оберіть мову:",
@@ -415,7 +415,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "pay_confirmed_renew": "✅ Оплату підтверджено — <b>{plan}</b> продовжено до {date}. Ваш API-ключ залишається дійсним.",
         "club_invite": "👥 <b>Чат для підписників</b>\nВаша підписка відкриває доступ до закритої групи. Натисніть, щоб увійти — я вас впущу:\n{link}",
         "club_removed": "👋 Доступ до чату для підписників завершився разом із підпискою. Продовжіть будь-коли — натисніть 📋 Тарифи — і отримаєте нове запрошення.",
-        "club_declined": "🔒 Не можу додати вас до чату для підписників — підписка неактивна. Натисніть 📋 Тарифи, оформіть підписку та знову відкрийте посилання-запрошення.",
+        "club_declined": "🔒 Не можу додати вас до чату для підписників — підписка неактивна. Натисніть 📋 Тарифи, оформіть підписку — і я надішлю вам персональне посилання-запрошення.",
     },
     "es": {
         "choose_language": "🌐 Por favor, elige tu idioma:",
@@ -529,7 +529,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "pay_confirmed_renew": "✅ Pago confirmado — <b>{plan}</b> extendido hasta {date}. Tu clave API sigue siendo válida.",
         "club_invite": "👥 <b>Chat de miembros</b>\nTu suscripción desbloquea el grupo privado de suscriptores. Pulsa para entrar y te dejaré pasar:\n{link}",
         "club_removed": "👋 Tu acceso al chat de miembros terminó con tu suscripción. Renueva cuando quieras — pulsa 📋 Planes — y recibirás una nueva invitación.",
-        "club_declined": "🔒 No puedo añadirte al chat de miembros: tu suscripción no está activa. Pulsa 📋 Planes para suscribirte y abre de nuevo tu enlace de invitación.",
+        "club_declined": "🔒 No puedo añadirte al chat de miembros: tu suscripción no está activa. Pulsa 📋 Planes para suscribirte y te enviaré tu propio enlace de invitación.",
     },
     "fr": {
         "choose_language": "🌐 Veuillez choisir votre langue :",
@@ -643,7 +643,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "pay_confirmed_renew": "✅ Paiement confirmé — <b>{plan}</b> prolongé jusqu'au {date}. Votre clé API reste valable.",
         "club_invite": "👥 <b>Chat des membres</b>\nVotre abonnement débloque le groupe privé des abonnés. Appuyez pour rejoindre, je vous laisse entrer :\n{link}",
         "club_removed": "👋 Votre accès au chat des membres a pris fin avec votre abonnement. Renouvelez à tout moment — appuyez sur 📋 Forfaits — et vous recevrez une nouvelle invitation.",
-        "club_declined": "🔒 Je ne peux pas vous ajouter au chat des membres : votre abonnement n'est pas actif. Appuyez sur 📋 Forfaits pour vous abonner, puis rouvrez votre lien d'invitation.",
+        "club_declined": "🔒 Je ne peux pas vous ajouter au chat des membres : votre abonnement n'est pas actif. Appuyez sur 📋 Forfaits pour vous abonner et je vous enverrai votre propre lien d'invitation.",
     },
 }
 
