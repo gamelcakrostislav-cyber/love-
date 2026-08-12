@@ -24,7 +24,7 @@ from app.models.payment import Payment
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.services import abuse, entitlements, keys, referrals
+from app.services import abuse, entitlements, keys, promos, referrals
 from app.services.audit import record_audit
 
 
@@ -164,6 +164,13 @@ async def activate_paid_payment(
     # Payer identity reused across accounts -> flag (multi-account linkage).
     if payer_fingerprint:
         await abuse.link_payer_fingerprint(db, user_id=user.id, payer_fingerprint=payer_fingerprint)
+
+    # Record the promo redemption (idempotent, one per user+code) now that the
+    # discounted invoice is actually paid.
+    if payment.promo_code_id is not None:
+        await promos.record_redemption(
+            db, promo_id=payment.promo_code_id, user_id=user.id, payment_id=payment.id
+        )
 
     # Unlock referral commission now that the referred user has paid.
     await referrals.qualify_on_payment(

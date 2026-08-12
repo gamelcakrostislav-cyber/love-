@@ -169,9 +169,9 @@ key keeps working until an admin acts (low false-positive cost).
 
 On first `/start` the user **picks a language** (English / Русский / Українська /
 Español / Français) — it localizes the bot and sets the AI's reply language; a
-**persistent button menu** (📋 Plans · 📊 Status · 🔑 Key · 📱 Devices · 🆘 Human ·
-🌐 Language · ❓ Help) replaces typing commands. Change language anytime with
-`/language` or the 🌐 button.
+**persistent button menu** (📋 Plans · 📊 Status · 🔑 Key · 📱 Devices · 🎁 Referrals ·
+🆘 Human · 🌐 Language · ❓ Help) replaces typing commands. Change language anytime
+with `/language` or the 🌐 button.
 
 Client commands (aiogram 3.x long-polling):
 
@@ -179,10 +179,14 @@ Client commands (aiogram 3.x long-polling):
 |---|---|
 | `/start [ref]` | provision account; `ref` = inviter's Telegram id captures a referral |
 | `/plans` | list plans (inline buy buttons) |
-| `/buy <plan>` | create an invoice (Crypto Pay wired in Phase 6) |
+| `/buy <plan> [code]` | create an invoice (Crypto Pay wired in Phase 6); optional discount code |
+| `/promo <code>` | apply a discount code; the next purchase uses it (valid 30 min) |
 | `/status` | subscription, expiry, API-key prefix |
 | `/key` | show key prefix; reissue (confirm) — reissue disables the old key |
 | `/devices` | list registered devices; remove one to free a slot |
+| `/referrals` | invite link + stats (invited / pending / paid / earned), your rank, **Share** & **🏆 Leaderboard** buttons |
+| `/leaderboard` | top referrers by earnings + your own rank (gamified growth loop) |
+| `/mute` · `/unmute` | opt out of / back into promotional pushes (transactional DMs always send) |
 | `/human` | hand off to a human (admins); free text otherwise goes to the AI agent |
 | `/help` | command list |
 
@@ -197,6 +201,10 @@ Admin commands (Telegram ids in `ADMIN_IDS`):
 | `/stats` | active users, sessions, paid revenue, flagged + abuse counts |
 | `/grant <telegram_id> <plan>` | grant/extend access (reuses webhook activation) |
 | `/revoke <telegram_id>` | revoke subscription, disable keys, kill sessions |
+| `/promonew <code> <20%\|$10> [plan=] [max=] [days=]` | create a discount code (forgiving syntax) |
+| `/promoedit <code> …` | modify a code: amount, `plan=`, `max=`, `days=`, or `on`/`off` |
+| `/promos` | list discount codes with usage |
+| `/promooff <code>` | deactivate a discount code |
 | `/flags` | review flagged keys + recent abuse events |
 | `/unflag <key_prefix\|id>` | clear a flag |
 | `/reply <telegram_id> <message>` | answer a user in a human handoff |
@@ -226,6 +234,50 @@ subscriptions past `expires_at` → `expired`, their keys disabled, their Redis
 sessions killed, stale session rows reaped. Expiry is therefore enforced
 server-side — the client can never self-extend, and revocation/expiry propagates
 within the entitlement cache window.
+
+It also sends **expiry reminders**: every `EXPIRY_REMINDER_MINUTES` it DMs users
+whose subscription falls into a days-left band (`EXPIRY_REMINDER_DAYS=7,3`),
+localized, with a one-tap renew button — deduped per band via a Redis marker so
+nobody is spammed.
+
+**Client push & automation** (all respect each user's `/mute` opt-out):
+- **Onboarding drip** — nudges not-yet-subscribed users at `ONBOARDING_DRIP_DAYS`
+  (default `1,3`) since signup.
+- **Win-back** — DMs lapsed users `WINBACK_DAYS` after they expire.
+- **Weekly digest** — a summary DM to active subscribers (plan, days left, referral
+  earnings), once per 7 days.
+- **Admin** — `/push <all|active|trial|inactive> <msg>` targets a segment;
+  `/broadcast` reaches everyone (transactional). Admins also get auto **abuse
+  alerts**. (Plus the Notion reconcile job when enabled.)
+
+## Notion sync (advanced database / CRM)
+
+Optionally mirror your whole business into a **Notion workspace** as eight linked
+databases — **Customers, Payments, Subscriptions, Referrals, Commissions, Flags &
+Abuse, Overview (daily KPIs), Audit Log** — so you get a rich, filterable
+dashboard without touching SQL.
+
+- **Auto-provisioned:** on first run the worker creates the databases (with emoji
+  icons) under a parent page you share with the integration, and remembers their
+  ids (in the `notion_sync` table). No manual table-building. A stored schema
+  version lets later builds add new properties/databases to an existing workspace.
+- **Linked, not flat:** child rows carry a Notion *relation* back to their
+  Customer, so you get real roll-ups and views. Customer rows are icon-tagged
+  💎 paid · 🧪 trial · ⚪ none.
+- **KPI dashboard:** the **Overview** database keeps one row per day (revenue,
+  active/paid/trial, signups, flags…) — chart it in Notion for a live dashboard.
+- **One-way mirror + best-effort:** a worker job reconciles every
+  `NOTION_RECONCILE_MINUTES` (default 3); a new sale is pushed within seconds of
+  the paid webhook. Unchanged rows are skipped via a content hash; a Redis lock
+  prevents overlapping runs; a per-run write budget keeps us under Notion's
+  ~3 req/s; every call is guarded so a Notion outage never affects the bot.
+- **Two-way actions (opt-out):** set a Customer's **Action** field
+  (grant/revoke/blogger) and the bot applies it via the *same* server-side path
+  as admin commands — never bypassing entitlement, with reset-first so it can't
+  double-apply. Disable with `NOTION_ALLOW_ACTIONS=false`.
+- **Off by default:** set `NOTION_SYNC_ENABLED=true`, `NOTION_API_KEY` and
+  `NOTION_PARENT_PAGE_ID` to enable. Admins check status / force a sync with
+  `/notion` and `/notion sync`. Step-by-step setup: [`deploy/notion.md`](deploy/notion.md).
 
 ## Payments
 

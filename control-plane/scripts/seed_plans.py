@@ -38,6 +38,8 @@ PLANS: list[dict] = [
         "name": "monthly",
         "price": Decimal("49.00"),
         "currency": "USD",
+        # price_stars left unset → derived from USD via usd_to_stars (keeps Stars
+        # and card prices in parity). Set an explicit value to override.
         "duration_days": 30,
         "rate_limit_per_min": 120,
         "max_devices": 2,

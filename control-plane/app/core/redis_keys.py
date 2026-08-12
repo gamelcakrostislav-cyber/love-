@@ -46,3 +46,65 @@ def support_human(telegram_id: int) -> str:
 def support_ratelimit(telegram_id: int) -> str:
     """Per-user counter capping AI-support calls per minute."""
     return f"support:rl:{telegram_id}"
+
+
+def sync_lock(name: str) -> str:
+    """Mutex so only one reconcile run (e.g. Notion) is in flight at a time."""
+    return f"lock:sync:{name}"
+
+
+def expiry_reminder(subscription_id: int, days: int) -> str:
+    """Marker that a 'expires in <days>' reminder was already sent for a sub."""
+    return f"reminder:{subscription_id}:{days}"
+
+
+def winback(user_id: int) -> str:
+    """Marker that a win-back nudge was already sent to a lapsed user."""
+    return f"winback:{user_id}"
+
+
+def abuse_alert_watermark() -> str:
+    """Highest AbuseEvent id already alerted to admins (so we only alert new ones)."""
+    return "abuse:alert:watermark"
+
+
+def drip(user_id: int, day: int) -> str:
+    """Marker that the day-<day> onboarding nudge was sent to a user."""
+    return f"drip:{user_id}:{day}"
+
+
+def digest(user_id: int) -> str:
+    """Marker (7-day TTL) that this user already got their weekly digest."""
+    return f"digest:{user_id}"
+
+
+def upgrade_nudge(user_id: int) -> str:
+    """Marker that an upgrade-to-best-plan nudge was sent (TTL re-allows it later)."""
+    return f"upgrade:{user_id}"
+
+
+def club_invited(user_id: int) -> str:
+    """Cooldown marker: a join-request link was DM'd to this subscriber. Suppresses
+    re-inviting them every sweep while they decide; expiry gives a bounded retry so
+    a transient DM failure (or an undelivered link) self-corrects without flooding."""
+    return f"club:invited:{user_id}"
+
+
+def milestone(user_id: int) -> str:
+    """Highest referral milestone already celebrated for a referrer."""
+    return f"growth:milestone:{user_id}"
+
+
+def feedback_mode(telegram_id: int) -> str:
+    """Flag: the user's next message should be captured as feedback (short TTL)."""
+    return f"feedback:mode:{telegram_id}"
+
+
+def promo_armed(telegram_id: int) -> str:
+    """The promo code a user applied via /promo, used on their next purchase."""
+    return f"promo:armed:{telegram_id}"
+
+
+def promo_entry(telegram_id: int) -> str:
+    """Flag: the user's next message should be read as a promo code (short TTL)."""
+    return f"promo:entry:{telegram_id}"

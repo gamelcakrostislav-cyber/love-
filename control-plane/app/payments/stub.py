@@ -7,6 +7,7 @@ Lets `/buy` complete without network. Real activation in dev happens via admin
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 from app.models.plan import Plan
 from app.models.user import User
@@ -16,7 +17,9 @@ from app.payments.base import InvoiceResult, PaymentProvider, WebhookEvent
 class StubProvider(PaymentProvider):
     name = "stub"
 
-    async def create_invoice(self, user: User, plan: Plan) -> InvoiceResult:
+    async def create_invoice(
+        self, user: User, plan: Plan, amount: Decimal | None = None
+    ) -> InvoiceResult:
         external_id = f"stub-{uuid.uuid4().hex}"
         return InvoiceResult(
             external_id=external_id,

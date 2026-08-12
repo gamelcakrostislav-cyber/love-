@@ -49,18 +49,73 @@ class Settings(BaseSettings):
 
     # Telegram bot
     bot_token: str = "CHANGE_ME"
+    # Bot @username (without @). Optional — lets the gateway build invite links
+    # without a getMe network call on the Mini App's hot path.
+    bot_username: str = ""
     # NoDecode stops pydantic-settings from JSON-decoding the env value before our
     # validator runs, so a bare "1966832731" or a "111,222" list both work.
     admin_ids: Annotated[set[int], NoDecode] = Field(default_factory=set)
 
-    # Payments
+    # Payments — Crypto Pay (@CryptoBot)
     cryptopay_api_token: str = "CHANGE_ME"
     cryptopay_api_base: str = "https://pay.crypt.bot/api"
     cryptopay_webhook_enabled: bool = True
 
+    # Native Telegram payments (in-app). Stars need no provider/hosting; card
+    # payments need a provider token from BotFather (Telegram Payments 2.0).
+    telegram_stars_enabled: bool = True
+    telegram_card_enabled: bool = False
+    telegram_provider_token: str = "CHANGE_ME"   # BotFather provider token (cards)
+    # Fallback Stars price = round(plan.price_usd * usd_to_stars) when a plan has
+    # no explicit price_stars. ~50 ⭐ per USD ≈ Telegram's ~$0.02/Star.
+    usd_to_stars: int = 50
+
     # Referral / rev-share
     referral_rate_standard: float = 0.20
     referral_rate_blogger: float = 0.30
+
+    # Telegram Mini App (in-Telegram web dashboard). Set webapp_url to the public
+    # HTTPS URL once hosted; the bot then shows a "Open App" menu button.
+    webapp_url: str = ""
+    webapp_init_data_ttl: int = 86400  # max age (s) of a signed initData payload
+
+    # Exclusive subscriber group — a private group the bot gates on an active
+    # subscription. Set to the group's chat id (e.g. -1001234567890); the bot
+    # must be an admin there with invite + ban permissions. 0 = disabled.
+    client_group_id: int = 0
+    client_group_invite_ttl: int = 0   # seconds the join-request link stays valid (0 = no expiry)
+    # After DM'ing a subscriber their join-request link, wait this long before
+    # re-inviting them if they haven't joined yet (anti-flood + bounded retry).
+    client_group_invite_cooldown: int = 3600
+    # Max users processed per sweep so a big first-enable backlog drains gradually
+    # instead of bursting into Telegram's rate limits.
+    club_sweep_limit: int = 25
+
+    # Feedback inbox — a private group/channel the bot posts user feedback to so
+    # admins can track it in one place. The bot must be a member/admin there.
+    # 0 = fall back to DMing each admin (the previous behaviour).
+    feedback_channel_id: int = 0
+
+    # Expiry reminders — DM users before their subscription lapses.
+    expiry_reminders_enabled: bool = True
+    expiry_reminder_days: str = "7,3"   # nudge a week out, then 3 days out (CSV, override in .env)
+    expiry_reminder_minutes: int = 60   # how often the worker sweeps for due reminders
+
+    # Win-back — DM lapsed users (no active sub) this many days after expiry.
+    winback_enabled: bool = True
+    winback_days: int = 3
+    winback_promo_code: str = ""        # optional code to offer (+ auto-arm) in win-back DMs
+
+    # Client push / automation — onboarding drip + weekly digest (respect opt-out).
+    onboarding_drip_enabled: bool = True
+    onboarding_drip_days: str = "1,3"   # nudge non-subscribers at these days-since-signup
+    weekly_digest_enabled: bool = True
+    upgrade_nudge_enabled: bool = True  # suggest the longest plan when it's cheaper per day
+    notifications_minutes: int = 60     # worker sweep cadence for drip/digest
+
+    # Server-to-server: trusted backends POST /internal/announce to post into the
+    # subscriber group. Empty token = endpoint disabled (fails closed).
+    internal_api_token: str = ""
 
     # AI support agent — any OpenAI-compatible provider (default: free Groq)
     support_ai_enabled: bool = True
@@ -69,6 +124,19 @@ class Settings(BaseSettings):
     support_model: str = "llama-3.3-70b-versatile"
     support_base_url: str = "https://api.groq.com/openai/v1"
     support_history_turns: int = 10  # how many prior turns to send as context
+
+    # Notion sync — mirror business data into an auto-built Notion CRM/dashboard.
+    # Disabled until NOTION_API_KEY is set (and != CHANGE_ME) and a parent page id
+    # is provided. The worker reconciles every notion_reconcile_minutes.
+    notion_sync_enabled: bool = False
+    notion_api_key: str = "CHANGE_ME"
+    notion_parent_page_id: str = ""
+    notion_api_base: str = "https://api.notion.com/v1"
+    notion_version: str = "2022-06-28"
+    notion_reconcile_minutes: int = 3
+    # Two-way: apply grant/revoke/blogger actions set from a Notion field, routed
+    # through the same server-side path as admin commands (never bypasses access).
+    notion_allow_actions: bool = True
 
     @field_validator("admin_ids", mode="before")
     @classmethod

@@ -26,3 +26,13 @@ the token within the [[Entitlement]] cache window even if the JWT hasn't expired
 ## Renewal nuance
 Since expiry disables keys, a renewing user gets their **same key reactivated**
 (no surprise rotation); only an explicit [[Bot Commands|/key]] reissue rotates.
+
+## Expiry reminders
+A separate sweep (every `EXPIRY_REMINDER_MINUTES`, default 60) DMs users **before**
+they lapse. `EXPIRY_REMINDER_DAYS` (default `3,1`) defines non-overlapping
+days-left bands; a sub gets one localized nudge per band, deduped by a Redis
+marker `reminder:<sub_id>:<days>` (TTL outlives the band so a renewed sub can be
+reminded again later). Best-effort — a failed DM never stops the sweep.
+
+## Other worker jobs
+- [[Notion Sync]] reconcile + two-way action apply (when enabled).

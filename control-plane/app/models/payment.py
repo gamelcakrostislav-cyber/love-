@@ -32,6 +32,12 @@ class Payment(Base):
 
     status: Mapped[str] = mapped_column(String(16), default=PaymentStatus.PENDING, nullable=False)
 
+    # Set when a discount code was applied; `amount` already reflects the
+    # discounted total. The redemption is recorded only once this payment is paid.
+    promo_code_id: Mapped[int | None] = mapped_column(
+        ForeignKey("promo_codes.id"), nullable=True, index=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

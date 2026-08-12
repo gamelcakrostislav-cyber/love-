@@ -23,6 +23,7 @@ commerce/licensing/anti-abuse system wrapped around a stubbed arbitrage engine.
 - [[Referral and Rev-Share]]
 - [[Payments and Crypto Pay]]
 - [[Worker and Expiry]]
+- [[Notion Sync]]
 
 ## Interfaces
 - [[Bot Commands]]

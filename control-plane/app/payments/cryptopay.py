@@ -35,11 +35,14 @@ class CryptoPayProvider(PaymentProvider):
         # Webhook signing key per Crypto Pay spec.
         return hashlib.sha256(self._token.encode()).digest()
 
-    async def create_invoice(self, user: User, plan: Plan) -> InvoiceResult:
+    async def create_invoice(
+        self, user: User, plan: Plan, amount: Decimal | None = None
+    ) -> InvoiceResult:
+        charge = plan.price if amount is None else amount
         body = {
             "currency_type": "fiat",
             "fiat": plan.currency,
-            "amount": str(plan.price),
+            "amount": str(charge),
             "description": f"{plan.name} subscription",
             # Round-trips back to us in the webhook; we map it to our user/plan.
             "payload": f"user:{user.id}|plan:{plan.id}",

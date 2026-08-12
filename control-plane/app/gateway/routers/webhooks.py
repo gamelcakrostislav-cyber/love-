@@ -16,7 +16,7 @@ from app.bot import notify
 from app.core.logging import get_logger
 from app.gateway.deps import DbDep
 from app.payments.factory import get_cryptopay
-from app.services import activation
+from app.services import activation, notion_sync
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 log = get_logger("webhook")
@@ -75,5 +75,7 @@ async def cryptopay_webhook(
                 f"✅ Payment confirmed — <b>{result.plan_name}</b> extended until "
                 f"{result.expires_at:%Y-%m-%d}. Your existing API key stays valid.",
             )
+        # Mirror the new sale to Notion immediately (best-effort, self-guarded).
+        await notion_sync.push_user(db, result.user_id)
 
     return JSONResponse(content={"ok": True})

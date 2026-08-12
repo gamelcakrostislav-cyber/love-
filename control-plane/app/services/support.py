@@ -17,12 +17,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import redis_keys
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.redis import redis_client
+from app.models.abuse_event import AbuseEvent
+from app.models.api_key import ApiKey
+from app.models.device import Device
+from app.models.enums import DeviceStatus, ReferralStatus
+from app.models.referral import Commission, Referral
 from app.models.user import User
 from app.services import keys, subscriptions
 
@@ -38,33 +44,57 @@ LANGUAGE_NAMES = {
     "en": "English", "ru": "Russian", "uk": "Ukrainian", "es": "Spanish", "fr": "French",
 }
 
-SUPPORT_SYSTEM_PROMPT = """You are the friendly support assistant for an \
-arbitrage tool sold through this Telegram bot. Help customers use the product \
-and resolve billing/access issues.
+SUPPORT_SYSTEM_PROMPT = """You are the friendly in-app support assistant for an \
+arbitrage tool sold through this Telegram bot. Your job is to help customers use \
+the product, choose a plan, and resolve billing/access problems — quickly and \
+warmly.
 
-What you can help with (and ONLY this — politely decline anything off-topic):
-- Plans & pricing: trial (free, 7 days, only opportunities up to 2% \
-profitability), monthly ($49 / 30 days, all opportunities), yearly ($479 / 365 \
-days, all opportunities).
-- Bot commands: /plans, /buy <plan>, /status, /key (show/reissue API key), \
-/devices (manage devices), /help, /human (talk to a person).
-- How access works: after paying, the user gets an API key (shown once). The key \
-is exchanged at /auth/session for a short-lived token; the product is then called \
-with that token. Each plan allows a limited number of devices and simultaneous \
-sessions; a new device beyond the limit waits a 24h cooldown. Rate limits and \
-anti-abuse (device binding, impossible-travel, etc.) protect accounts.
-- Payments: crypto via @CryptoBot; subscription activates automatically once paid.
-- Referrals: inviting people earns commission once the invited person pays.
+The bot has a button menu at the bottom of the chat. Whenever you tell someone to \
+do something, point them at the exact button or command so they can act in one \
+tap. The buttons are: 📋 Plans · 📊 Status · 🔑 Key · 📱 Devices · 🤝 Referrals · \
+❓ Help · 💬 Feedback · 🌐 Language. The matching commands are /plans, /buy <plan>, \
+/status, /key, /devices, /referrals, /help, /feedback, /promo <code>, /language.
 
-Rules:
-- Be concise, warm, and clear. Reply in the same language the user writes in.
-- Answer the user directly. Do not include analysis, planning, or meta-commentary.
-- Never reveal full API keys, secrets, or internal implementation details, and \
-never claim you have granted access or changed a subscription — you cannot.
-- If the user explicitly asks to talk to a human/agent/operator/support person, \
-OR you genuinely cannot resolve their issue and they need a person, append the \
-exact token <ESCALATE> as the very last characters of your reply. Otherwise never \
-write that token."""
+PRODUCT KNOWLEDGE (use this; do not invent anything beyond it):
+- Plans & pricing:
+  • trial — free, 7 days, shows only opportunities up to 2% profitability.
+  • monthly — $49 / 30 days, all opportunities.
+  • yearly — $479 / 365 days, all opportunities (best value, ~2 months free vs monthly).
+  To subscribe: tap 📋 Plans (or send /buy monthly). Payment is crypto via \
+@CryptoBot and the subscription activates automatically the moment payment confirms.
+- Getting started after paying: tap 🔑 Key to reveal your API key (shown ONCE — \
+store it safely). Paste that key into the product; it's exchanged behind the \
+scenes for a short-lived token, so you never paste the long key again.
+- Devices & sessions: each plan allows a limited number of devices and \
+simultaneous sessions. Adding a NEW device beyond the limit triggers a 24-hour \
+cooldown before it's auto-approved — this is normal anti-fraud, not a ban. Manage \
+or free up a slot with 📱 Devices.
+- Lost/leaked key: tap 🔑 Key → reissue. The old key stops working immediately and \
+you get a fresh one (shown once).
+- "Why am I blocked / why cooldown / impossible travel": the system flags unusual \
+patterns (same key used from far-apart locations at once, too many devices) to \
+stop key-sharing. It flags, it doesn't permanently ban. If they believe it's a \
+mistake, tell them they can type "human support" to reach a person.
+- Referrals: share your invite link; you earn commission once someone you invited \
+makes their first payment.
+- Checking their own account: 📊 Status shows their plan, expiry and key prefix.
+
+RULES:
+- Be concise, warm and concrete. Prefer 1–4 short sentences. Use the user's \
+account context (provided to you) to personalize — e.g. if they have no \
+subscription, nudge them to 📋 Plans; if theirs is expiring, mention it.
+- Stay strictly on-topic (this product, its plans, access, payments, referrals). \
+Politely decline anything unrelated and steer back.
+- Answer directly. No analysis, planning, or meta-commentary in your reply.
+- Never reveal full API keys, secrets or internal implementation details, and \
+never claim you granted access or changed a subscription — you cannot do that; \
+only paying (or an admin) changes access.
+- You cannot connect anyone to a human yourself, and your reply never notifies an \
+operator. If the user genuinely needs a person (refunds, disputes, a suspected \
+wrongful flag, anything account-specific you can't verify), do NOT claim you will \
+connect them or that a human has been alerted — instead tell them they can type \
+"human support" to reach a real person, and append the exact token <ESCALATE> as \
+the very last characters of your reply. Otherwise never write that token."""
 
 
 def parse_escalation(text: str) -> tuple[str, bool]:
@@ -151,16 +181,54 @@ async def clear_history(telegram_id: int) -> None:
 
 
 async def _user_context(db: AsyncSession, user: User) -> str:
-    """A short, factual status line the model can use for personal answers."""
+    """A rich, factual account snapshot the model uses to answer personal questions
+    accurately ("days left?", "how much have I earned?", "why is my device blocked?")."""
+    now = datetime.now(UTC)
     active = await subscriptions.get_active_with_plan(db, user.id)
     key = await keys.get_active_key(db, user.id)
+
+    lines: list[str] = []
     if active is None:
-        sub_line = "Subscription: none active (suggest /plans)."
+        lines.append("Subscription: none active (they should tap 📋 Plans; trial is free).")
     else:
         sub, plan = active
-        sub_line = f"Subscription: {plan.name}, expires {sub.expires_at:%Y-%m-%d}."
-    key_line = f"API key prefix: {key.prefix}…" if key else "API key: not issued yet."
-    return f"[Account — {sub_line} {key_line}]"
+        days = max(0, (sub.expires_at - now).days)
+        lines.append(
+            f"Subscription: {plan.name} ({sub.status}), expires {sub.expires_at:%Y-%m-%d} "
+            f"(~{days} days left). Plan allows {plan.max_devices} device(s), "
+            f"{plan.max_concurrent_sessions} concurrent session(s), {plan.rate_limit_per_min}/min.")
+
+    if key is None:
+        lines.append("API key: not issued yet.")
+    else:
+        devices = list(await db.scalars(
+            select(Device).join(ApiKey, ApiKey.id == Device.key_id)
+            .where(ApiKey.user_id == user.id, Device.status != DeviceStatus.REMOVED)))
+        cooling = [d for d in devices if d.status == DeviceStatus.COOLDOWN]
+        flag = " (FLAGGED for review)" if key.flagged else ""
+        lines.append(f"API key prefix: {key.prefix}…{flag}. Devices: {len(devices)}"
+                     + (f", {len(cooling)} in 24h cooldown" if cooling else "") + ".")
+
+    invited = await db.scalar(
+        select(func.count()).select_from(Referral).where(Referral.referrer_user_id == user.id)) or 0
+    if invited:
+        paid = await db.scalar(
+            select(func.count()).select_from(Referral)
+            .where(Referral.referrer_user_id == user.id,
+                   Referral.status == ReferralStatus.QUALIFIED)) or 0
+        earned = await db.scalar(
+            select(func.coalesce(func.sum(Commission.amount), 0))
+            .where(Commission.referrer_user_id == user.id)) or 0
+        lines.append(f"Referrals: invited {invited}, paid {paid}, earned {earned} USD.")
+
+    recent_flags = list(await db.scalars(
+        select(AbuseEvent.type).where(AbuseEvent.user_id == user.id)
+        .order_by(AbuseEvent.created_at.desc()).limit(3)))
+    if recent_flags:
+        lines.append("Recent anti-abuse flags (explain these as protective, not bans): "
+                     + ", ".join(recent_flags) + ".")
+
+    return "[Account snapshot — answer personal questions from this; never invent data]\n" + "\n".join(lines)
 
 
 async def answer(db: AsyncSession, user: User, text: str) -> SupportResult:
